@@ -10,10 +10,6 @@
 inline constexpr unsigned VM_INSTRUCTION_MAX_OPERANDS = 5;
 inline constexpr unsigned VM_LABEL_CAPACITY = 4096;
 
-enum class IRFormat {
-	Ocarina,
-	Chestnut
-};
 enum class VMOPType {
 	OPRND_NULL,
 	OPRND_String,
@@ -47,7 +43,7 @@ struct VMFunctionData {
 	std::vector<std::string> argument_types;
 	std::map<unsigned, VMOPType> local_types;
 	unsigned argument_count = 0;
-	bool is_constructor = false, metadata_complete = false, code_loaded = false;
+	bool is_constructor = false, code_loaded = false;
 	std::vector<VMInstruction> instructions;
 };
 
@@ -55,13 +51,12 @@ struct VMVariableData {
 	unsigned id = 0, offset = 0, size = 0;
 	VMOPType operand_type = VMOPType::OPRND_NULL;
 	std::string name, type;
-	bool layout_known = false;
 };
 
 struct VMObjectData {
 	unsigned id = 0, parent_id = 0, size = 0;
 	std::string name;
-	bool layout_known = false, parent_resolved = false;
+	bool parent_resolved = false;
 	VMFunctionData initializer;
 	std::map<unsigned, VMFunctionData> function_data;
 	std::map<unsigned, VMVariableData> variable_data;
@@ -72,5 +67,5 @@ struct VMStringPool {
 	unsigned size = 0;
 };
 
-int vm_instruction_operand_count(std::uint8_t opcode, IRFormat format);
+int vm_instruction_operand_count(std::uint8_t opcode);
 VMOPType vm_operand_type(std::string_view type);

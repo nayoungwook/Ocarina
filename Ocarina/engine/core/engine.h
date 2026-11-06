@@ -57,7 +57,8 @@ class Engine {
 		void set_after_scene_update(std::function<void(Engine *)> callback);
         void start();
 
-        void init_engine(const std::string &title, int width, int height);
+        void init_window(const std::string &title, int width, int height);
+        void init_engine();
 
         int get_frames();
         int get_ticks();

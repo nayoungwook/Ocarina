@@ -2,12 +2,11 @@
 
 #include "code_data.h"
 
-#include <deque>
 #include <iosfwd>
 #include <optional>
 #include <span>
 
-struct SDL_Window;
+class CVM;
 
 struct VMNumericValue {
 	std::int32_t i32 = 0;
@@ -24,8 +23,8 @@ struct VMOperand {
 
 class SyscallContext {
 public:
-	SyscallContext() = default;
-	~SyscallContext();
+	SyscallContext(CVM &vm);
+	~SyscallContext() = default;
 	SyscallContext(const SyscallContext &) = delete;
 	SyscallContext &operator=(const SyscallContext &) = delete;
 
@@ -33,26 +32,12 @@ public:
 		std::span<const VMOperand> arguments,
 		const VMStringPool &vm_string_pool,
 		std::ostream &out);
-	void run_engine();
 
 private:
-	class Window {
-	public:
-		Window(const std::string &title, int width, int height);
-		~Window();
-		Window(const Window &) = delete;
-		Window &operator=(const Window &) = delete;
-
-	private:
-		SDL_Window *window = nullptr;
-	};
-
-	std::deque<Window> windows;
-	bool video_initialized = false;
-
 	void print(std::span<const VMOperand> arguments,
 		const VMStringPool &vm_string_pool,
 		std::ostream &out) const;
 	VMOperand vector(std::span<const VMOperand> arguments) const;
 	VMOperand window(std::span<const VMOperand> arguments, const VMStringPool &vm_string_pool);
+	CVM &vm;
 };

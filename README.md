@@ -24,7 +24,7 @@ quit
 등록에 실패하면 이전 프로그램도 남지 않습니다. `run`은 전역 초기화 코드와 `main`을 실행합니다.
 `quit` 또는 EOF로 셸을 종료합니다.
 
-최신 Chestnut 바이트코드는 `load file.cb`로 등록합니다. 여러 파일을 함께 지정할 수 있으며,
+Ocarina 바이트코드는 `load file.cb`로 등록합니다. 여러 파일을 함께 지정할 수 있으며,
 `load`의 상대 경로는 현재 작업 폴더를 기준으로 합니다.
 
 ## C++ API
@@ -47,8 +47,8 @@ std::optional<VMOperand> result = vm.run(std::cout);
 ```
 
 `CVM`이 등록·로딩·실행을 모두 담당합니다. `clear()`는 바이트, 메타데이터, 문자열 풀과 실행 상태를 초기화합니다.
-현재 Ocarina IR은 `register_ir()`로 컴파일러의 인자 타입·지역 변수·객체 배치 정보를 함께 전달합니다.
-`register_bytes()`만 사용하면 구형 IR에서 인자가 있는 함수의 서명을 알 수 없습니다.
+인자 타입·지역 변수·객체 배치 정보는 모두 IR 바이트에 기록됩니다.
+`register_ir()`와 `register_bytes()`는 같은 데이터를 등록하므로 파일로 저장한 후에도 보조 정보 없이 실행할 수 있습니다.
 
 ```cpp
 CVM vm;
@@ -57,11 +57,10 @@ vm.load_files();
 vm.run(std::cout);
 ```
 
-Ocarina와 최신 Chestnut의 바이너리 형식은 `IRFormat::Ocarina`, `IRFormat::Chestnut`으로 구분합니다.
-`register_bytes()`의 기본값은 Ocarina, `register_bytecode()`의 기본값은 Chestnut입니다.
-서로 다른 형식을 한 CVM에 섞을 수 없습니다. 잘린 데이터, 잘못된 명령어·라벨·문자열 참조는 오류로 보고하며,
+IR은 Ocarina 단일 형식이며 API에서 형식을 선택하지 않습니다.
+잘린 데이터, 잘못된 메타데이터·명령어·라벨·문자열 참조는 오류로 보고합니다.
 로딩에 실패하면 이전에 로딩한 데이터는 유지합니다.
-
+기존 형식의 `.cb` 파일은 소스에서 다시 컴파일해야 합니다.
 ## 언어와 메모리
 
 언어 키워드는 `object`이며 함수, 생성자, 상속, 전역·지역·멤버 변수, 조건문과 반복문을 지원합니다.

@@ -22,7 +22,8 @@ void TonicContext::init_engine(const std::string &title, int width, int height) 
 	if (active_session && !initialized) throw std::runtime_error("Only one Tonic window can be active.");
 	shutdown();
 	try {
-		engine.init_engine(title, width, height);
+		engine.init_engine();
+		engine.init_window(title, width, height);
 		engine.set_scene(&scene);
 		initialized = true; active_session = true; running = true;
 		previous = SDL_GetPerformanceCounter();

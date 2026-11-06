@@ -13,18 +13,16 @@ struct ObjectRelocation {
 
 class IRLoader {
 public:
-	IRLoader(std::vector<byte> input_bytes, IRFormat input_format, std::string source_name = {});
+	IRLoader(std::vector<byte> input_bytes, std::string source_name = {});
 	static void read_ir_files(CVM &vm, std::vector<IRLoader> &readers);
 	std::size_t reader_cnt = 0;
 
 private:
 	std::vector<byte> bytes;
-	IRFormat format;
 	std::string source;
 	std::vector<ObjectRelocation> objects;
 	unsigned string_base = 0;
 	std::set<std::pair<unsigned, unsigned>> functions, variables, function_code;
-	std::set<unsigned> initializers;
 
 	[[noreturn]] void reader_error(const std::string &message) const;
 	bool has_bytes(std::size_t count) const;
@@ -46,7 +44,6 @@ private:
 		bool block_boundary = false);
 	std::vector<VMInstruction> read_function_code();
 	void read_function(CVM &vm, unsigned owner);
-	void read_initializer(CVM &vm, unsigned owner);
 	void read_object(CVM &vm);
 	void read_code(CVM &vm);
 	void read_rodata(CVM &vm);

@@ -14,7 +14,7 @@ Display::Display(const std::string& title, int width, int height)
 		// Display owns the SDL window and GL context, then exposes the drawable
 		// viewport that framebuffer and screen-quad rendering must respect.
 		window = SDL_CreateWindow(title.c_str(), this->width, this->height,
-			SDL_WINDOW_OPENGL);
+			SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 		if (window == nullptr)
 			error(std::string("Window creation failed: ") + SDL_GetError());
 		SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);

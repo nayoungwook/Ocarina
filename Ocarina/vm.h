@@ -9,15 +9,14 @@
 #include <unordered_map>
 
 #include "ir.h"
+#include "engine/engine.h"
 
 class CVM {
 public:
 	void clear();
 	void register_ir(std::string fname, const IRContext &irc);
-	void register_bytes(std::string fname,
-		std::vector<byte> bytes,
-		IRFormat format = IRFormat::Ocarina);
-	void register_bytecode(const std::string &path, IRFormat format = IRFormat::Chestnut);
+	void register_bytes(std::string fname, std::vector<byte> bytes);
+	void register_bytecode(const std::string &path);
 	void load_files();
 	std::optional<VMOperand> run(std::ostream &out);
 
@@ -30,14 +29,10 @@ public:
 	VMStringPool vm_string_pool;
 
 	unsigned main_func_id = std::numeric_limits<unsigned>::max();
-	IRFormat loaded_format = IRFormat::Ocarina;
+
+	Engine engine;
 
 private:
-	std::unordered_map<std::string, IRFormat> byte_formats;
-	std::unordered_map<std::string, std::map<std::pair<std::string, unsigned>, VMFunctionData>>
-		function_layouts;
-	std::unordered_map<std::string, std::map<std::string, VMObjectData>> object_layouts;
-
 	std::vector<VMOperand> vm_stack;
 	std::deque<VMFrame> frames;
 	std::deque<VMHeapObject> heap_mapper;
@@ -65,7 +60,6 @@ private:
 		bool receiver = false);
 	VMHeapObject &find_heap_object(const VMOperand &operand);
 	const VMFunctionData &vm_find_member_function_data(unsigned object_id, unsigned id) const;
-	const VMVariableData &vm_find_heap_variable_data(unsigned heap_index, unsigned id) const;
 	void vm_exec_object_initializers(unsigned object_id, unsigned heap_index);
 	void exec_object_instruction(const VMInstruction &instruction, unsigned heap_index);
 	void exec_array_instruction(const VMInstruction &instruction);

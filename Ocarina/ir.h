@@ -1,7 +1,6 @@
 #pragma once
 
 #include "semantics.h"
-#include "code_data.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -18,13 +17,13 @@
 
 #define META_TERM 0x03
 
-// META_OBJECT object_id(uint) object_str(char*) [contents] META_TERM
+// META_OBJECT id, name, parent_id, size, [contents], META_TERM
 #define META_OBJECT 0x04
 
-// META_FUNC func_id(uint) func_str(char*) return_type(char*)
+// Functions include argument types, stack size and local variable layouts.
 #define META_FUNC 0x05
 
-// META_VAR var_id(uint) var_str(char*)
+// META_VAR id, name, type, offset, size
 #define META_VAR 0x06
 
 // META_CONSTRUCTOR func_id(uint) func_str(char*)
@@ -146,22 +145,18 @@ public:
 	void emit_byte(byte _b);
 	void gen_ir(ParserContext input_pc);
 	const std::vector<byte> &get_bytes() const;
-	const std::map<std::pair<std::string, unsigned>, VMFunctionData> &get_function_layouts() const;
-	const std::map<std::string, VMObjectData> &get_object_layouts() const;
 
 private:
 	ParserContext pc;
-	std::map<std::pair<std::string, unsigned>, VMFunctionData> function_layouts;
-	std::map<std::string, VMObjectData> object_layouts;
 	SemanticsContext semantics;
 	std::size_t return_label = NoNode;
 	void emit_str(const std::string &str);
 	void emit_int(std::uint32_t si);
 	void emit_float(float f);
 	void emit_double(double f);
-	void gen_func_metadata(const FuncData &fd);
+	void gen_func_metadata(const FuncData &fd, const std::vector<std::size_t> &declared_vars);
 	void gen_var_metadata(const VarData &vd);
-	void gen_object_metadata(const ObjectData &cd);
+	void gen_object_metadata(const ObjectAST &object_ast);
 	void gen_metadata();
 	unsigned get_total_stack_size_of_func(const std::vector<std::size_t> &declared_vars) const;
 	RODATA_Str add_str_rodata(const std::string &str);

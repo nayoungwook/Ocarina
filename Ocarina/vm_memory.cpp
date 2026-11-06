@@ -11,6 +11,8 @@ static void check_storage_range(unsigned capacity, unsigned offset, unsigned siz
 
 VMOperand VMStorage::load(unsigned offset, unsigned size) const {
 	check_storage_range(this->size, offset, size);
+	if (!types.contains(offset) || get_operand_size(types.at(offset)) != size)
+		throw std::runtime_error("Variable access does not match its layout.");
 	const auto found = values.find(offset);
 	if (found == values.end())
 		throw std::runtime_error("Read of an uninitialized VM variable.");
@@ -19,8 +21,9 @@ VMOperand VMStorage::load(unsigned offset, unsigned size) const {
 
 void VMStorage::save(unsigned offset, unsigned size, VMOperand operand) {
 	check_storage_range(this->size, offset, size);
-	if (types.contains(offset))
-		operand = convert_argument(operand, types.at(offset));
+	if (!types.contains(offset) || get_operand_size(types.at(offset)) != size)
+		throw std::runtime_error("Variable access does not match its layout.");
+	operand = convert_argument(operand, types.at(offset));
 	values[offset] = operand;
 }
 
@@ -56,25 +59,6 @@ const VMFunctionData &CVM::vm_find_member_function_data(unsigned object_id, unsi
 	throw std::runtime_error("Member function not found: " + std::to_string(id));
 }
 
-const VMVariableData &CVM::vm_find_heap_variable_data(unsigned heap_index, unsigned id) const {
-	const VMHeapObject &object = heap_mapper.at(heap_index);
-	if (object.is_array)
-		throw std::runtime_error("Array used as an object.");
-
-	unsigned object_id = object.object_id;
-	for (std::size_t depth = 0; depth < this->object_data.size(); ++depth) {
-		const VMObjectData &object_data = this->object_data.at(object_id);
-		const auto found = object_data.variable_data.find(id);
-		if (found != object_data.variable_data.end())
-			return found->second;
-
-		if (object_data.parent_id == 0)
-			break;
-		object_id = object_data.parent_id;
-	}
-	throw std::runtime_error("Object variable not found: " + std::to_string(id));
-}
-
 void CVM::vm_exec_object_initializers(unsigned object_id, unsigned heap_index) {
 	std::vector<unsigned> parents;
 	while (object_id != 0) {
@@ -88,6 +72,7 @@ void CVM::vm_exec_object_initializers(unsigned object_id, unsigned heap_index) {
 		for (const auto &[id, variable] : this->object_data.at(*parent).variable_data) {
 			VMOperand operand;
 			operand.op_type = variable.operand_type;
+			heap_mapper.at(heap_index).data.types[variable.offset] = variable.operand_type;
 			heap_mapper.at(heap_index).data.save(variable.offset, variable.size, operand);
 		}
 	}
@@ -104,7 +89,7 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hea
 	const auto &arguments = instruction.operands.u32;
 	if (instruction.opcode == OP_NEW_OBJECT) {
 		const VMObjectData &object_data = this->object_data.at(arguments[0]);
-		if (!object_data.layout_known || object_data.size != arguments[1])
+		if (object_data.size != arguments[1])
 			throw std::runtime_error("Object allocation size does not match its metadata.");
 
 		std::vector<VMOperand> operands = update_function_arguments(arguments[3]);
@@ -137,7 +122,7 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hea
 	}
 
 	const bool attr = instruction.opcode == OP_LOAD_ATTR || instruction.opcode == OP_INCRE_ATTR ||
-		instruction.opcode == OP_DECRE_ATTR || instruction.opcode == OP_SAVE_ATTR;
+					  instruction.opcode == OP_DECRE_ATTR || instruction.opcode == OP_SAVE_ATTR;
 	const bool save = instruction.opcode == OP_SAVE_OBJECT || instruction.opcode == OP_SAVE_ATTR;
 	VMOperand value;
 	if (save)
@@ -151,21 +136,11 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hea
 	if (heap_index == 0 || heap_index >= heap_mapper.size() || heap_mapper.at(heap_index).is_array)
 		throw std::runtime_error("Object instruction requires a valid receiver.");
 
-	const bool latest = this->loaded_format == IRFormat::Chestnut;
-	const unsigned offset = arguments[latest ? 1 : 0];
-	const unsigned size = arguments[latest ? 2 : 1];
-	VMOPType type = VMOPType::OPRND_NULL;
-	if (latest) {
-		const VMVariableData &variable_data = vm_find_heap_variable_data(heap_index, arguments[0]);
-		if (variable_data.offset != offset || variable_data.size != size)
-			throw std::runtime_error("Object variable layout does not match its metadata.");
-		type = variable_data.operand_type;
-	}
+	const unsigned offset = arguments[0];
+	const unsigned size = arguments[1];
 
 	VMStorage &storage = heap_mapper.at(heap_index).data;
 	if (save) {
-		if (latest)
-			value = convert_argument(value, type);
 		storage.save(offset, size, value);
 	} else if (instruction.opcode == OP_LOAD_OBJECT || instruction.opcode == OP_LOAD_ATTR) {
 		value = storage.load(offset, size);
@@ -174,8 +149,9 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hea
 		vm_stack_push(value);
 	} else
 		storage.increment(offset,
-			size,
-			instruction.opcode == OP_DECRE_OBJECT || instruction.opcode == OP_DECRE_ATTR);
+						  size,
+						  instruction.opcode == OP_DECRE_OBJECT ||
+							  instruction.opcode == OP_DECRE_ATTR);
 }
 
 void CVM::exec_array_instruction(const VMInstruction &instruction) {

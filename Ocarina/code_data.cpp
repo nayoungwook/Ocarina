@@ -1,8 +1,6 @@
 #include "code_data.h"
 
-int vm_instruction_operand_count(std::uint8_t opcode, IRFormat format) {
-	const bool latest = format == IRFormat::Chestnut;
-
+int vm_instruction_operand_count(std::uint8_t opcode) {
 	switch (opcode) {
 	case 0x56:
 	case 0x57:
@@ -43,7 +41,7 @@ int vm_instruction_operand_count(std::uint8_t opcode, IRFormat format) {
 	case 0x91:
 	case 0x92:
 	case 0x94:
-		return latest ? 3 : 2;
+		return 2;
 	case 0x95:
 		return 4;
 	case 0x70:
@@ -51,11 +49,11 @@ int vm_instruction_operand_count(std::uint8_t opcode, IRFormat format) {
 	case 0x99:
 		return 0;
 	case 0x62:
-		return latest ? 2 : -1;
+		return 2;
 	case 0x71:
-		return latest ? -1 : 0;
+		return 0;
 	case 0x77:
-		return latest ? 0 : -1;
+		return 0;
 	default:
 		return -1;
 	}
