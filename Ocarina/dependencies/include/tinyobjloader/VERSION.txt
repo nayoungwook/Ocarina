@@ -1,0 +1,4 @@
+tinyobjloader
+Source: https://github.com/tinyobjloader/tinyobjloader
+Revision: 45636bdcef1a4fec140346b90c0b50bf0bc3e23b
+License: MIT

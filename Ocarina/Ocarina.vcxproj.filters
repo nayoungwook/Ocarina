@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="vm.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="code_data.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ir_load.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="lexer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="parser_array.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="semantics_array.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="ir_array.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="parser.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="source_files.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="type.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="semantics.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="syscall.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="syscall_semantics.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="vm_execute.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_instruction.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_memory.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_numeric.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_syscall.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="ir.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="parser.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="vm.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="code_data.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ir_load.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ast.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="diagnostic.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="type.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="semantics.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="vm_memory.h"><Filter>헤더 파일</Filter></ClInclude>
+    <ClInclude Include="vm_numeric.h"><Filter>헤더 파일</Filter></ClInclude>
+    <ClInclude Include="vm_opcode.h"><Filter>헤더 파일</Filter></ClInclude>
+    <ClInclude Include="vm_syscall.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="ir.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="error.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="tonic_context.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="token.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="lexer.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="engine" />
+    <Filter Include="engine\api" />
+    <Filter Include="engine\core" />
+    <Filter Include="engine\renderer" />
+    <Filter Include="engine\model" />
+    <Filter Include="engine\ui" />
+    <Filter Include="engine\util" />
+    <Filter Include="engine\error" />
+    <Filter Include="engine\shaders" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="engine\api\audio.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\drawing.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\fonts.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\frame.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\input.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\lifecycle.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\resources.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\api\textures.cpp">
+      <Filter>engine\api</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\camera.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\display.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\engine.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\game_object.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\input.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\scene.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\sound.cpp">
+      <Filter>engine\core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\error\error.cpp">
+      <Filter>engine\error</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\model\model.cpp">
+      <Filter>engine\model</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\framebuffer.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\light_system.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\light.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\mesh.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\render_context.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\renderer.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\screen_quad.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\shader_manager.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\shader.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\sprite_batch.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\texture.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\ttfont.cpp">
+      <Filter>engine\renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\ui\ui_button.cpp">
+      <Filter>engine\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\ui\ui_scroll.cpp">
+      <Filter>engine\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\util\mathf.cpp">
+      <Filter>engine\util</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\util\util.cpp">
+      <Filter>engine\util</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="engine\api\context.h">
+      <Filter>engine\api</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\camera.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\display.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\engine.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\game_object.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\input.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\scene.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\sound.h">
+      <Filter>engine\core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\engine.h">
+      <Filter>engine</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\error\error.h">
+      <Filter>engine\error</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\model\model.h">
+      <Filter>engine\model</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\color.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\font_render_options.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\framebuffer.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\light_system.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\light.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\mesh.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\render_context.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\renderer.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\screen_quad.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\shader_manager.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\shader.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\sprite_batch.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\texture.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\renderer\ttfont.h">
+      <Filter>engine\renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\ui\ui_button.h">
+      <Filter>engine\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\ui\ui_scroll.h">
+      <Filter>engine\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\util\mathf.h">
+      <Filter>engine\util</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\util\util.h">
+      <Filter>engine\util</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="engine\shaders\default.frag">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\default.vert">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\framebuffer.frag">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\framebuffer.vert">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\model.frag">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\model.vert">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\shape.frag">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\shape.vert">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\sprite.frag">
+      <Filter>engine\shaders</Filter>
+    </None>
+    <None Include="engine\shaders\sprite.vert">
+      <Filter>engine\shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
+
+
+

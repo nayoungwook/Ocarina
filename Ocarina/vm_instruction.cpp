@@ -1,0 +1,164 @@
+#include "vm.h"
+#include "vm_opcode.h"
+#include "vm_numeric.h"
+
+#include <stdexcept>
+
+void CVM::exec_instruction(const VMInstruction &instruction,
+	std::size_t &instruction_index,
+	VMFrame &frame,
+	unsigned heap_index) {
+	const auto &arguments = instruction.operands.u32;
+
+	switch (instruction.opcode) {
+	case OP_SP_PUSH:
+		if (frame.stack_pointer > frame.data.size ||
+			arguments[0] > frame.data.size - frame.stack_pointer)
+			throw std::runtime_error("VM stack frame overflow.");
+		frame.stack_pointer += arguments[0];
+		break;
+	case OP_SP_POP:
+		if (arguments[0] > frame.stack_pointer)
+			throw std::runtime_error("VM stack frame underflow.");
+		frame.stack_pointer -= arguments[0];
+		break;
+	case OP_SP_LOAD:
+		vm_stack_push(frame.data.load(arguments[0], arguments[1]));
+		break;
+	case OP_SP_SAVE:
+		frame.data.save(arguments[0], arguments[1], vm_stack_pop());
+		break;
+	case OP_SP_INCRE:
+	case OP_SP_DECRE:
+		frame.data.increment(arguments[0], arguments[1], instruction.opcode == OP_SP_DECRE);
+		break;
+	case OP_SYSCALL: {
+		const auto operands = update_function_arguments(arguments[1]);
+		const auto result = syscalls->get().handle_syscall(arguments[0],
+			operands,
+			this->vm_string_pool,
+			output->get());
+		if (result)
+			vm_stack_push(*result);
+		break;
+	}
+	case OP_CALL:
+	case OP_CALL_ATTR:
+	case OP_CALL_OBJECT:
+	case OP_CALL_GLOBAL: {
+		if (instruction.opcode == OP_CALL_ATTR) {
+			if (arguments[1] >= vm_stack.size())
+				throw std::runtime_error("Method receiver is missing.");
+			const VMOperand receiver = vm_stack.at(vm_stack.size() - arguments[1] - 1);
+			const VMHeapObject &object = find_heap_object(receiver);
+			call_function(vm_find_member_function_data(object.object_id, arguments[0]),
+				arguments[1],
+				static_cast<unsigned>(receiver.val.i32),
+				true);
+		} else if (instruction.opcode == OP_CALL_OBJECT) {
+			if (heap_index == 0 || heap_index >= heap_mapper.size())
+				throw std::runtime_error("Member call requires an object.");
+			call_function(
+				vm_find_member_function_data(heap_mapper.at(heap_index).object_id, arguments[0]),
+				arguments[1],
+				heap_index);
+		} else
+			call_function(this->function_data.at(arguments[0]), arguments[1]);
+		break;
+	}
+	case OP_CALL_SUPER: {
+		if (heap_index == 0 || heap_index >= heap_mapper.size())
+			throw std::runtime_error("super requires an object.");
+		const VMObjectData &parent = this->object_data.at(arguments[0]);
+		const VMFunctionData &constructor = parent.function_data.at(0);
+		if (!constructor.is_constructor)
+			throw std::runtime_error("Parent constructor not found.");
+		call_function(constructor, arguments[1], heap_index);
+		break;
+	}
+	case OP_LOAD_STR: {
+		if (!this->vm_string_pool.str_pool.contains(arguments[0]))
+			throw std::runtime_error("Invalid string pool index.");
+		VMOperand operand;
+		operand.op_type = VMOPType::OPRND_String;
+		operand.val.i32 = static_cast<std::int32_t>(arguments[0]);
+		vm_stack_push(operand);
+		break;
+	}
+	case OP_RET:
+		break;
+	case OP_RET_VAL:
+		frame.return_value = vm_stack_pop();
+		break;
+	case OP_EXPR_OP: {
+		const VMOperand rhs = vm_stack_pop();
+		const VMOperand lhs = vm_stack_pop();
+		vm_stack_push(vm_numeric_operation(instruction.operands.u8, lhs, rhs));
+		break;
+	}
+	case OP_GOTO:
+		instruction_index = arguments[0];
+		break;
+	case OP_JE:
+	case OP_JNE: {
+		const bool cond = vm_condition(vm_stack_pop());
+		if (cond == (instruction.opcode == OP_JE))
+			instruction_index = arguments[0];
+		break;
+	}
+	case OP_NEG:
+		vm_stack_push(vm_negate(vm_stack_pop()));
+		break;
+	case OP_LDC_I4:
+	case OP_LDC_F4:
+	case OP_LDC_F8: {
+		VMOperand operand;
+		if (instruction.opcode == OP_LDC_I4) {
+			operand.op_type = VMOPType::OPRND_INT32;
+			operand.val.i32 = instruction.operands.i32[0];
+		} else if (instruction.opcode == OP_LDC_F4) {
+			operand.op_type = VMOPType::OPRND_FLOAT32;
+			operand.val.f32 = instruction.operands.f32;
+		} else {
+			operand.op_type = VMOPType::OPRND_FLOAT64;
+			operand.val.f64 = instruction.operands.f64;
+		}
+		vm_stack_push(operand);
+		break;
+	}
+	case OP_PUSH_NULL:
+		vm_stack_push({});
+		break;
+	case OP_LOAD_OBJECT:
+	case OP_INCRE_OBJECT:
+	case OP_DECRE_OBJECT:
+	case OP_LOAD_ATTR:
+	case OP_INCRE_ATTR:
+	case OP_DECRE_ATTR:
+	case OP_SAVE_OBJECT:
+	case OP_SAVE_ATTR:
+	case OP_NEW_OBJECT:
+		exec_object_instruction(instruction, heap_index);
+		break;
+	case OP_LOAD_GLOBAL:
+		vm_stack_push(globals.load(arguments[0], arguments[1]));
+		break;
+	case OP_INCRE_GLOBAL:
+	case OP_DECRE_GLOBAL:
+		globals.increment(arguments[0], arguments[1], instruction.opcode == OP_DECRE_GLOBAL);
+		break;
+	case OP_SAVE_GLOBAL:
+		globals.save(arguments[0], arguments[1], vm_stack_pop());
+		break;
+	case OP_NEW_ARRAY:
+	case OP_ARRAY_LOAD:
+	case OP_ARRAY_SAVE:
+	case OP_ARRAY_LENGTH:
+	case OP_ARRAY_PUSH:
+	case OP_ARRAY_REMOVE:
+		exec_array_instruction(instruction);
+		break;
+	default:
+		throw std::runtime_error("Unknown VM opcode: " + std::to_string(instruction.opcode));
+	}
+}
