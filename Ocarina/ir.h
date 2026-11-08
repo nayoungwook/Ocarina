@@ -90,6 +90,7 @@
 #define OP_ASSIGN 0x0b
 #define OP_OR 0x0c
 #define OP_AND 0x0d
+#define OP_MOD 0x0e
 
 // --------------------------
 // ** Load and push data **
@@ -119,12 +120,9 @@
 #define OP_SAVE_GLOBAL 0x93
 #define OP_SAVE_ATTR 0x94
 #define OP_NEW_OBJECT 0x95 // object_id, size, constructor_id (-1 if absent), arg_count
-#define OP_NEW_ARRAY 0x96
-#define OP_ARRAY_LOAD 0x97
-#define OP_ARRAY_SAVE 0x98
-#define OP_ARRAY_LENGTH 0x99
-#define OP_ARRAY_PUSH 0x9a
-#define OP_ARRAY_REMOVE 0x9b
+#define OP_DUP 0x9c // duplicate the top count(uint) operands in order
+#define OP_CONVERT 0x9d // convert top operand to compiler-selected VMOPType(uint)
+#define OP_ADD_CHILD 0x9e // receiver(uint): 0=current object, 1=operand stack
 
 using byte = std::uint8_t;
 
@@ -163,10 +161,9 @@ private:
 	byte get_op_byte(OperatorType op_type) const;
 	void gen_node_ir(const Node &node, bool value_required = false);
 	void gen_child_ir(NodeId id, bool value_required = true);
+	void gen_value_ir(const Node &node, const Type &target);
+	void gen_conversion(const Type &source, const Type &target);
 	void gen_ident_ir(const Node &node, bool value_required);
-	void gen_array_decl_ir(const ArrayDeclAST &array_ast);
-	void gen_array_access_ir(const Node &node, bool load_value = true);
-	void gen_array_call_ir(const FuncCallAST &call, bool value_required);
 	void gen_ident_load_ir(const VarData &var_data, bool is_attr);
 	void gen_ident_incre_ir(const VarData &var_data, bool is_attr);
 	void gen_ident_decre_ir(const VarData &var_data, bool is_attr);

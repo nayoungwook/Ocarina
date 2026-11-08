@@ -72,7 +72,7 @@ public:
 	std::unordered_map<std::string, struct Type> object_type_smtb;     // Type will be stored.
 	std::unordered_map<std::string, struct Type> primitive_type_smtb; // Type will be stored.
 
-	std::vector<struct Type> numeric_type_array;
+	std::vector<struct Type> numeric_types;
 
 	std::unordered_map<std::string, struct FuncData> syscall_smtb;
 	std::vector<struct ObjectData> object_data;
@@ -118,8 +118,6 @@ private:
 
 	NodeId store_node(struct Node node);
 	Token parse_type_token();
-	Node gen_array_decl_node();
-	Node gen_array_access_node(Node node);
 	struct Node gen_func_call_node(const struct Token &first);
 	void parse_attribute(struct Node &ident_node);
 	struct Node gen_ident_node(const struct Token &first);

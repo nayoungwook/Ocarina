@@ -41,27 +41,7 @@ struct Type gen_object_type(const std::string &type_str) {
 	return type;
 }
 
-struct Type gen_array_type(const Type &element_type) {
-	Type type;
-	type.type_str = "array<" + element_type.type_str + ">";
-	type.type_kind = TK_Array;
-	type.nbyte = 8;
-	return type;
-}
-
-struct Type array_element_type(const ParserContext &pc, const Type &array_type) {
-	if (array_type.type_kind != TK_Array)
-		panic("Expected an array type.", pc.tc);
-	return find_type(pc, array_type.type_str.substr(6, array_type.type_str.size() - 7));
-}
-
 struct Type find_type(const ParserContext &pc, const std::string &type_str) {
-	if (type_str.starts_with("array<") && type_str.ends_with('>')) {
-		const Type element = find_type(pc, type_str.substr(6, type_str.size() - 7));
-		if (element.type_str == "void" || element.type_kind == TK_Null)
-			panic("Invalid array element type.", pc.tc);
-		return gen_array_type(element);
-	}
 	auto primitive_type = pc.primitive_type_smtb.find(type_str);
 	if (primitive_type != pc.primitive_type_smtb.end()) return primitive_type->second;
 	auto object_type = pc.object_type_smtb.find(type_str);

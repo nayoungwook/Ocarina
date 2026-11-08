@@ -1,58 +1,52 @@
 #include "code_data.h"
+#include "vm_opcode.h"
 
 int vm_instruction_operand_count(std::uint8_t opcode) {
 	switch (opcode) {
-	case 0x56:
-	case 0x57:
-	case 0x60:
-	case 0x72:
-	case 0x73:
-	case 0x74:
-	case 0x75:
-	case 0x76:
-	case 0x81:
-	case 0x82:
-	case 0x83:
-	case 0x97:
-	case 0x98:
+	case OP_SP_PUSH:
+	case OP_SP_POP:
+	case OP_LOAD_STR:
+	case OP_EXPR_OP:
+	case OP_GOTO:
+	case OP_LABEL:
+	case OP_JE:
+	case OP_JNE:
+	case OP_LDC_I4:
+	case OP_LDC_F4:
+	case OP_LDC_F8:
+	case OP_DUP:
+	case OP_CONVERT:
+	case OP_ADD_CHILD:
 		return 1;
-	case 0x58:
-	case 0x59:
-	case 0x5a:
-	case 0x5b:
-	case 0x5c:
-	case 0x5d:
-	case 0x5e:
-	case 0x5f:
-	case 0x61:
-	case 0x8c:
-	case 0x8d:
-	case 0x8e:
-	case 0x93:
-	case 0x96:
-	case 0x9a:
-	case 0x9b:
+	case OP_SP_LOAD:
+	case OP_SP_SAVE:
+	case OP_SP_INCRE:
+	case OP_SP_DECRE:
+	case OP_SYSCALL:
+	case OP_CALL:
+	case OP_CALL_ATTR:
+	case OP_CALL_OBJECT:
+	case OP_CALL_GLOBAL:
+	case OP_CALL_SUPER:
+	case OP_LOAD_GLOBAL:
+	case OP_INCRE_GLOBAL:
+	case OP_DECRE_GLOBAL:
+	case OP_SAVE_GLOBAL:
+	case OP_LOAD_OBJECT:
+	case OP_INCRE_OBJECT:
+	case OP_DECRE_OBJECT:
+	case OP_LOAD_ATTR:
+	case OP_INCRE_ATTR:
+	case OP_DECRE_ATTR:
+	case OP_SAVE_OBJECT:
+	case OP_SAVE_ATTR:
 		return 2;
-	case 0x85:
-	case 0x8a:
-	case 0x8b:
-	case 0x8f:
-	case 0x90:
-	case 0x91:
-	case 0x92:
-	case 0x94:
-		return 2;
-	case 0x95:
+	case OP_NEW_OBJECT:
 		return 4;
-	case 0x70:
-	case 0x84:
-	case 0x99:
-		return 0;
-	case 0x62:
-		return 2;
-	case 0x71:
-		return 0;
-	case 0x77:
+	case OP_RET:
+	case OP_RET_VAL:
+	case OP_PUSH_NULL:
+	case OP_NEG:
 		return 0;
 	default:
 		return -1;
@@ -83,9 +77,6 @@ VMOPType vm_operand_type(std::string_view type) {
 
 	if (type == "vector")
 		return VMOPType::OPRND_VEC;
-
-	if (type == "window")
-		return VMOPType::OPRND_WINDOW;
 
 	return VMOPType::OPRND_ADDRESS;
 }

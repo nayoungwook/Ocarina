@@ -10,7 +10,7 @@
 inline constexpr unsigned VM_INSTRUCTION_MAX_OPERANDS = 5;
 inline constexpr unsigned VM_LABEL_CAPACITY = 4096;
 
-enum class VMOPType {
+enum class VMOPType : std::uint8_t {
 	OPRND_NULL,
 	OPRND_String,
 	OPRND_INT32,
@@ -20,7 +20,6 @@ enum class VMOPType {
 	OPRND_ADDRESS,
 	OPRND_CHAR16,
 	OPRND_VEC,
-	OPRND_WINDOW,
 };
 
 struct VMInstructionOperands {
@@ -41,6 +40,7 @@ struct VMFunctionData {
 	unsigned id = 0, stack_size = 0;
 	std::string name, return_type = "void";
 	std::vector<std::string> argument_types;
+	std::vector<unsigned> argument_sizes;
 	std::map<unsigned, VMOPType> local_types;
 	unsigned argument_count = 0;
 	bool is_constructor = false, code_loaded = false;

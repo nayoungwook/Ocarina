@@ -7,7 +7,7 @@
 void ParserContext::add_primitive_numeric(const std::string &name, unsigned nbyte, unsigned rank, bool is_signed, bool is_integer) {
 	struct Type numeric_type = gen_numeric_type(name, nbyte, gen_numeric_data(rank, is_signed, is_integer));
 	primitive_type_smtb[name] = numeric_type;
-	numeric_type_array.push_back(std::move(numeric_type));
+	numeric_types.push_back(std::move(numeric_type));
 }
 
 void ParserContext::init_primitive() {
@@ -49,6 +49,10 @@ NodeId ParserContext::store_node(struct Node node) {
 	NodeId id = node_pool.size();
 	node_pool.push_back(std::move(node));
 	return id;
+}
+
+Token ParserContext::parse_type_token() {
+	return tc.consume(TokenType::TokIdent);
 }
 
 const struct Node &ParserContext::get_node(NodeId id) const {
@@ -146,7 +150,6 @@ std::vector<struct Node> ParserContext::gen_body() {
 
 struct Node ParserContext::gen_constructor_node(const struct Token &first) {
 	ParserContext &pc = *this;
-	(void)first;
 	struct ConstructorAST constructor = {};
 
 	struct Token func_name = pc.tc.consume(TokenType::TokIdent);
@@ -163,7 +166,6 @@ struct Node ParserContext::gen_constructor_node(const struct Token &first) {
 }
 
 struct Node ParserContext::gen_func_decl_node(const struct Token &first) {
-	(void)first;
 	struct FuncDeclAST func_decl = {};
 
 	struct Token func_name_tok = tc.consume(TokenType::TokIdent);
@@ -184,7 +186,6 @@ struct Node ParserContext::gen_func_decl_node(const struct Token &first) {
 }
 
 struct Node ParserContext::gen_var_decl_node(const struct Token &first) {
-	(void)first;
 	struct VarDeclBundleAST result = {};
 	bool comp = false;
 	while (!comp) {
@@ -279,7 +280,6 @@ struct Node ParserContext::gen_if_stmt_node(const struct Token &first) {
 }
 
 struct Node ParserContext::gen_for_stmt_node(const struct Token &first) {
-	(void)first;
 	struct ForStmtAST result = {};
 
 	tc.consume(TokenType::TokLParen);
@@ -311,7 +311,6 @@ struct Node ParserContext::gen_for_stmt_node(const struct Token &first) {
 
 struct Node ParserContext::gen_ret_node(const struct Token &first) {
 	ParserContext &pc = *this;
-	(void)first;
 	struct Node expr = pc.tc.peek().type == TokenType::TokSemiColon ? Node{} : parse_expression();
 	struct ReturnAST ret_ast = {};
 
@@ -323,7 +322,6 @@ struct Node ParserContext::gen_ret_node(const struct Token &first) {
 }
 
 struct Node ParserContext::gen_object_decl_node(const struct Token &first) {
-	(void)first;
 	struct ObjectAST object_ast = {};
 
 	struct Token name_tok = tc.consume(TokenType::TokIdent);
@@ -343,8 +341,6 @@ struct Node ParserContext::gen_object_decl_node(const struct Token &first) {
 }
 
 struct Node ParserContext::gen_new_node(const struct Token &first) {
-	(void)first;
-
 	struct Token object_name_tok = tc.consume(TokenType::TokIdent);
 	struct ParamData param_data = parse_func_call_params();
 
@@ -383,7 +379,7 @@ short ParserContext::get_number_literal_byte(const std::string &num_lit_str) {
 }
 
 struct Type ParserContext::find_numeric_type(unsigned nbyte, bool is_integer, bool is_signed) {
-	for (const Type &numeric_type : numeric_type_array) {
+	for (const Type &numeric_type : numeric_types) {
 		struct NumericData numeric_data = numeric_type.data.numeric_data;
 
 		if (numeric_data.is_integer == is_integer && numeric_data.is_signed == is_signed && numeric_type.nbyte == nbyte) {
@@ -400,9 +396,6 @@ struct Node ParserContext::parse_expr_node() {
 	struct Token first = tc.pull();
 
 	switch (first.type) {
-
-	case TokenType::TokLBracket:
-		return gen_array_decl_node();
 
 	case TokenType::TokNumberLiteral: {
 		struct NumberLiteralAST num = {};
@@ -534,11 +527,12 @@ struct Node ParserContext::parse_term() {
 	struct Token tok = {};
 
 	while ((tok = tc.peek()).type != TokenType::TokEOF &&
-		(tok.type == TokenType::TokMul || tok.type == TokenType::TokDiv)) {
+		(tok.type == TokenType::TokMul || tok.type == TokenType::TokDiv || tok.type == TokenType::TokMod)) {
 		TokenType op = tc.pull().type;
 		struct Node right = parse_unary_expression();
 
-		enum OperatorType op_type = (op == TokenType::TokMul) ? OpMUL : OpDIV;
+		enum OperatorType op_type = op == TokenType::TokMul ? OpMUL :
+			op == TokenType::TokDiv ? OpDIV : OpMOD;
 
 		struct BinExprAST bin_expr = {};
 
@@ -637,10 +631,6 @@ struct Node ParserContext::parse_postfix() {
 	struct Token tok = {};
 
 	while ((tok = tc.peek()).type != TokenType::TokEOF) {
-		if (tok.type == TokenType::TokLSquareBracket) {
-			node = gen_array_access_node(std::move(node));
-			continue;
-		}
 		if (tok.type == TokenType::TokDot) {
 			tc.consume(TokenType::TokDot);
 			parse_attribute(node);
@@ -777,16 +767,23 @@ struct Node ParserContext::parse_expression() {
 	struct Node node = parse_logical_expression();
 	struct Token tok = {};
 
-	while (((tok = tc.peek()).type != TokenType::TokEOF) &&
-		(tc.peek().type == TokenType::TokAssign)) {
+	if (((tok = tc.peek()).type != TokenType::TokEOF) &&
+		(tok.type == TokenType::TokAssign || tok.type == TokenType::TokPlusAssign ||
+		 tok.type == TokenType::TokMinusAssign || tok.type == TokenType::TokMultAssign ||
+		 tok.type == TokenType::TokDivAssign || tok.type == TokenType::TokModAssign)) {
 		TokenType op = tc.pull().type;
-		struct Node right = parse_logical_expression();
+		struct Node right = parse_expression();
 
 		enum OperatorType op_type = OpNone;
 		switch (op) {
 		case TokenType::TokAssign:
 			op_type = OpASSIGN;
 			break;
+		case TokenType::TokPlusAssign: op_type = OpPLUSASSIGN; break;
+		case TokenType::TokMinusAssign: op_type = OpMINUSASSIGN; break;
+		case TokenType::TokMultAssign: op_type = OpMULTASSIGN; break;
+		case TokenType::TokDivAssign: op_type = OpDIVASSIGN; break;
+		case TokenType::TokModAssign: op_type = OpMODASSIGN; break;
 		default:
 			panic("Unknown operator type.", tc);
 		}

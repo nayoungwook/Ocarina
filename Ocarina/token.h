@@ -28,8 +28,6 @@ enum class TokenType {
 	TokRParen,
 	TokLBracket,
 	TokRBracket,
-	TokLSquareBracket,
-	TokRSquareBracket,
 	TokAssign,
 	TokSemiColon,
 	TokColon,
@@ -75,6 +73,8 @@ enum class TokenType {
 	TokFalse,
 
 	TokNull,
+	TokMod,
+	TokModAssign,
 };
 
 struct SourceLocation {

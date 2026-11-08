@@ -41,6 +41,12 @@ void Engine::shutdown() {
 	height = 0;
 	cached_frames = 0;
 	cached_ticks = 0;
+	loop_started = false;
+	previous_frame = 0;
+	update_lag = 0.0;
+	fps_timer = 0.0;
+	frame_count = 0;
+	tick_count = 0;
 }
 
 void Engine::init_window(const std::string &title, int width, int height) {
@@ -166,111 +172,77 @@ int Engine::get_ticks() {
 }
 
 void Engine::start() {
-	// Main loop: poll input, run fixed-step updates, render queued work, then
-	// swap the SDL OpenGL window.
-	bool running = true;
-	Uint64 previous = SDL_GetPerformanceCounter();
-	double lag = 0.0;
+	while (run_frame()) {
+	}
+}
 
-	const int TARGET_FPS = 60;
-	const float TIME_STEP = 1.0f / TARGET_FPS;
+bool Engine::run_frame() {
+	if (display == nullptr || renderer == nullptr || input == nullptr)
+		return false;
+	if (!loop_started) {
+		previous_frame = SDL_GetPerformanceCounter();
+		loop_started = true;
+		std::cout << "Starting engine... (Powered by Tonic.)" << std::endl;
+	}
+
+	renderer->begin_frame();
+	if (current_scene != nullptr)
+		current_scene->start_frame();
+	input->begin_new_frame();
 
 	SDL_Event event;
-	int frames = 0;
-	int ticks = 0;
-	double fps_timer = 0.0;
-
-	std::cout << "Starting engine... (Powered by Tonic.)" << std::endl;
-
-	while (running) {
-		bool valid = !(display == nullptr || renderer == nullptr || input == nullptr);
-
-		if (valid) {
-			renderer->begin_frame();
-			if (current_scene != nullptr) {
-				current_scene->start_frame();
-			}
-			input->begin_new_frame();
-		}
-
-		while (SDL_PollEvent(&event)) {
-			// SDL events are folded into Input before the scene update so the
-			// scene sees a consistent one-frame snapshot.
-
-			if (valid) {
-				input->process_event(event, this);
-			}
-
-			switch (event.type) {
-			case SDL_EVENT_QUIT:
-			case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-				running = false;
-				break;
-
-			case SDL_EVENT_WINDOW_RESIZED:
-			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-				if (valid) {
-					this->display->update_viewport(event.window.data1, event.window.data2);
-					this->input->refresh_mouse_position(this);
-				}
-				break;
-			}
-		}
-
-		Uint64 current = SDL_GetPerformanceCounter();
-		double elapsed = (double)(current - previous) / SDL_GetPerformanceFrequency();
-		previous = current;
-		lag += elapsed;
-		fps_timer += elapsed;
-
-		while (lag >= TIME_STEP) {
-			if (valid) {
-				// Fixed timestep keeps game logic stable even if rendering speed
-				// fluctuates. Rendering still happens once per outer loop.
-				if (current_scene != nullptr) {
-					current_scene->update();
-				}
-				if (after_scene_update)
-					after_scene_update(this);
-				input->end_update();
-				ticks++;
-			}
-			lag -= TIME_STEP;
-		}
-
-		if (valid) {
-			FrameBuffer::resize_camera_sized_framebuffers(camera);
-			FrameBuffer::bind_screen_framebuffer();
-			glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			current_framebuffer = nullptr;
-			FrameBuffer::bind_screen_framebuffer();
-
-			if (current_scene != nullptr) {
-				current_scene->render();
-				current_scene->flush_render_context();
-			}
-
-			current_framebuffer = nullptr;
-			FrameBuffer::bind_screen_framebuffer();
-		}
-
-		frames++;
-
-		if (valid) {
-			SDL_GL_SwapWindow(display->get_window());
-		} else
-			SDL_Delay(1);
-
-		if (fps_timer >= 1.0) {
-			cached_frames = frames;
-			cached_ticks = ticks;
-			frames = 0;
-			ticks = 0;
-			fps_timer -= 1.0;
+	while (SDL_PollEvent(&event)) {
+		input->process_event(event, this);
+		switch (event.type) {
+		case SDL_EVENT_QUIT:
+		case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+			return false;
+		case SDL_EVENT_WINDOW_RESIZED:
+		case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+			display->update_viewport(event.window.data1, event.window.data2);
+			input->refresh_mouse_position(this);
+			break;
 		}
 	}
+
+	const Uint64 current = SDL_GetPerformanceCounter();
+	const double elapsed = static_cast<double>(current - previous_frame) / SDL_GetPerformanceFrequency();
+	previous_frame = current;
+	// Shell commands can take time; avoid an unbounded catch-up after they finish.
+	update_lag += std::min(elapsed, 0.25);
+	fps_timer += elapsed;
+	constexpr double TIME_STEP = 1.0 / 60.0;
+	while (update_lag >= TIME_STEP) {
+		if (current_scene != nullptr)
+			current_scene->update();
+		if (after_scene_update)
+			after_scene_update(this);
+		input->end_update();
+		++tick_count;
+		update_lag -= TIME_STEP;
+	}
+
+	FrameBuffer::resize_camera_sized_framebuffers(camera);
+	FrameBuffer::bind_screen_framebuffer();
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	current_framebuffer = nullptr;
+	if (current_scene != nullptr) {
+		current_scene->render();
+		current_scene->flush_render_context();
+	}
+	current_framebuffer = nullptr;
+	FrameBuffer::bind_screen_framebuffer();
+	SDL_GL_SwapWindow(display->get_window());
+	++frame_count;
+	if (fps_timer >= 1.0) {
+		cached_frames = frame_count;
+		cached_ticks = tick_count;
+		frame_count = 0;
+		tick_count = 0;
+		fps_timer = 0.0;
+	}
+	return true;
 }
 
 ShaderManager *Engine::get_shader_manager() {

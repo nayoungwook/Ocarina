@@ -37,8 +37,6 @@ enum ASTType {
 	AST_Constructor = 15,
 	AST_New = 16,
 	AST_Null = 17,
-	AST_ArrayDeclaration = 18,
-	AST_ArrayAccess = 19,
 	AST_BoolLiteral = 20,
 	AST_Negative = 21,
 };
@@ -55,7 +53,6 @@ struct StringLiteralAST {
 struct IdentifierAST {
 	struct Token ident;
 	bool is_attr = {};
-	bool is_array_length = false;
 
 	// semantics
 	std::size_t var_data = NoNode;
@@ -93,8 +90,19 @@ enum OperatorType {
 	OpEQUALLESS = 10,
 	OpASSIGN = 11,
 	OpOR = 12,
-	OpAND = 13
+	OpAND = 13,
+	OpPLUSASSIGN = 14,
+	OpMINUSASSIGN = 15,
+	OpMULTASSIGN = 16,
+	OpDIVASSIGN = 17,
+	OpMOD = 18,
+	OpMODASSIGN = 19,
 };
+
+inline bool is_assignment_op(OperatorType op) {
+	return op == OpASSIGN || op == OpPLUSASSIGN || op == OpMINUSASSIGN ||
+		op == OpMULTASSIGN || op == OpDIVASSIGN || op == OpMODASSIGN;
+}
 
 struct BinExprAST {
 	NodeId left = NoNode, right = NoNode;
@@ -135,10 +143,11 @@ struct FuncCallAST {
 	std::vector<struct Node> params;
 	bool is_attr = {};
 	bool is_syscall = false;
-	bool is_array = false;
+	bool is_add_child = false;
 
 	// semantics
 	std::size_t func_data = NoNode;
+	std::size_t super_object = NoNode;
 };
 
 struct IdentIncreAST {
@@ -197,23 +206,13 @@ struct NullAST {
 	struct Token null_tok;
 };
 
-struct ArrayDeclAST {
-	std::vector<struct Node> elements;
-	struct Token ele_type_tok;
-};
-
-struct ArrayAccessAST {
-	std::vector<struct Node> indexes;
-	NodeId target_array = NoNode;
-};
-
 struct NegAST {
 	NodeId ast = NoNode;
 };
 
 struct Node {
 	enum ASTType type = AST_None;
-	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, ArrayDeclAST, ArrayAccessAST, NegAST> ast;
+	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, NegAST> ast;
 	NodeId attr = NoNode;
 };
 

@@ -15,7 +15,7 @@ union TypeData {
 };
 
 enum TypeKind {
-	TK_Numeric, TK_Object, TK_Primitive, TK_Null, TK_Array
+	TK_Numeric, TK_Object, TK_Primitive, TK_Null
 };
 
 struct Type {
@@ -32,6 +32,4 @@ struct Type gen_primitive_type(const std::string &type_str, unsigned nbyte);
 struct Type gen_numeric_type(const std::string &type_str, unsigned nbyte, struct NumericData numeric_data);
 struct Type gen_object_type(const std::string &type_str);
 struct Type gen_null_type();
-struct Type gen_array_type(const Type &element_type);
-struct Type array_element_type(const ParserContext &pc, const Type &array_type);
 struct Type find_type(const ParserContext &pc, const std::string &type_str);

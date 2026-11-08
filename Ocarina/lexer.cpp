@@ -160,8 +160,6 @@ struct Token TokenizerContext::gen_sc_token() {
 	case ')': type = TokenType::TokRParen; break;
 	case '{': type = TokenType::TokLBracket; break;
 	case '}': type = TokenType::TokRBracket; break;
-	case '[': type = TokenType::TokLSquareBracket; break;
-	case ']': type = TokenType::TokRSquareBracket; break;
 	case ':': type = TokenType::TokColon; break;
 	case ';': type = TokenType::TokSemiColon; break;
 	case '.': type = TokenType::TokDot; break;
@@ -184,12 +182,14 @@ struct Token TokenizerContext::gen_sc_token() {
 		else if (current_ch() == '*') type = TokenType::TokPow;
 		break;
 	case '/': type = current_ch() == '=' ? TokenType::TokDivAssign : TokenType::TokDiv; break;
+	case '%': type = current_ch() == '=' ? TokenType::TokModAssign : TokenType::TokMod; break;
 	default: panic("Undefined special character.", tc);
 	}
 	switch (type) {
 	case TokenType::TokEqual: case TokenType::TokNotEqual: case TokenType::TokEqualLesser: case TokenType::TokEqualGreater:
 	case TokenType::TokOr: case TokenType::TokAnd: case TokenType::TokPlusAssign: case TokenType::TokMinusAssign:
 	case TokenType::TokMultAssign: case TokenType::TokDivAssign: case TokenType::TokIncrease: case TokenType::TokDecrease: case TokenType::TokPow:
+	case TokenType::TokModAssign:
 		str += next_ch();
 		break;
 	default: break;

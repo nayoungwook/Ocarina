@@ -7,10 +7,19 @@
 void CVM::exec_instruction(const VMInstruction &instruction,
 	std::size_t &instruction_index,
 	VMFrame &frame,
-	unsigned heap_index) {
+	unsigned hierarchy_index) {
 	const auto &arguments = instruction.operands.u32;
 
 	switch (instruction.opcode) {
+	case OP_DUP: {
+		const unsigned count = arguments[0];
+		if (count == 0 || count > vm_stack.size() - frame.operand_base)
+			throw std::runtime_error("Invalid operand count for duplication.");
+		const std::size_t begin = vm_stack.size() - count;
+		for (unsigned i = 0; i < count; ++i)
+			vm_stack_push(vm_stack.at(begin + i));
+		break;
+	}
 	case OP_SP_PUSH:
 		if (frame.stack_pointer > frame.data.size ||
 			arguments[0] > frame.data.size - frame.stack_pointer)
@@ -50,30 +59,30 @@ void CVM::exec_instruction(const VMInstruction &instruction,
 			if (arguments[1] >= vm_stack.size())
 				throw std::runtime_error("Method receiver is missing.");
 			const VMOperand receiver = vm_stack.at(vm_stack.size() - arguments[1] - 1);
-			const VMHeapObject &object = find_heap_object(receiver);
+			const VMHierarchyObject &object = find_object(receiver);
 			call_function(vm_find_member_function_data(object.object_id, arguments[0]),
 				arguments[1],
 				static_cast<unsigned>(receiver.val.i32),
 				true);
 		} else if (instruction.opcode == OP_CALL_OBJECT) {
-			if (heap_index == 0 || heap_index >= heap_mapper.size())
+			if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
 				throw std::runtime_error("Member call requires an object.");
 			call_function(
-				vm_find_member_function_data(heap_mapper.at(heap_index).object_id, arguments[0]),
+				vm_find_member_function_data(hierarchy.at(hierarchy_index).object_id, arguments[0]),
 				arguments[1],
-				heap_index);
+				hierarchy_index);
 		} else
 			call_function(this->function_data.at(arguments[0]), arguments[1]);
 		break;
 	}
 	case OP_CALL_SUPER: {
-		if (heap_index == 0 || heap_index >= heap_mapper.size())
+		if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
 			throw std::runtime_error("super requires an object.");
 		const VMObjectData &parent = this->object_data.at(arguments[0]);
 		const VMFunctionData &constructor = parent.function_data.at(0);
 		if (!constructor.is_constructor)
 			throw std::runtime_error("Parent constructor not found.");
-		call_function(constructor, arguments[1], heap_index);
+		call_function(constructor, arguments[1], hierarchy_index);
 		break;
 	}
 	case OP_LOAD_STR: {
@@ -96,6 +105,9 @@ void CVM::exec_instruction(const VMInstruction &instruction,
 		vm_stack_push(vm_numeric_operation(instruction.operands.u8, lhs, rhs));
 		break;
 	}
+	case OP_CONVERT:
+		vm_stack_push(convert_argument(vm_stack_pop(), static_cast<VMOPType>(arguments[0])));
+		break;
 	case OP_GOTO:
 		instruction_index = arguments[0];
 		break;
@@ -138,7 +150,7 @@ void CVM::exec_instruction(const VMInstruction &instruction,
 	case OP_SAVE_OBJECT:
 	case OP_SAVE_ATTR:
 	case OP_NEW_OBJECT:
-		exec_object_instruction(instruction, heap_index);
+		exec_object_instruction(instruction, hierarchy_index);
 		break;
 	case OP_LOAD_GLOBAL:
 		vm_stack_push(globals.load(arguments[0], arguments[1]));
@@ -150,14 +162,18 @@ void CVM::exec_instruction(const VMInstruction &instruction,
 	case OP_SAVE_GLOBAL:
 		globals.save(arguments[0], arguments[1], vm_stack_pop());
 		break;
-	case OP_NEW_ARRAY:
-	case OP_ARRAY_LOAD:
-	case OP_ARRAY_SAVE:
-	case OP_ARRAY_LENGTH:
-	case OP_ARRAY_PUSH:
-	case OP_ARRAY_REMOVE:
-		exec_array_instruction(instruction);
+	case OP_ADD_CHILD: {
+		const VMOperand child = vm_stack_pop();
+		find_object(child);
+		unsigned parent = hierarchy_index;
+		if (arguments[0] != 0) {
+			const VMOperand receiver = vm_stack_pop();
+			find_object(receiver);
+			parent = static_cast<unsigned>(receiver.val.i32);
+		}
+		hierarchy.add_child(parent, static_cast<unsigned>(child.val.i32));
 		break;
+	}
 	default:
 		throw std::runtime_error("Unknown VM opcode: " + std::to_string(instruction.opcode));
 	}

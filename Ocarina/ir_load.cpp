@@ -173,7 +173,9 @@ void IRLoader::read_function_metadata(CVM &vm, unsigned owner, bool is_construct
 		if (type_name.empty() || !data.local_types.contains(offset) ||
 			data.local_types.at(offset) != type)
 			reader_error("argument layout does not match local variables");
-		offset += get_operand_size(type);
+		const unsigned size = get_operand_size(type);
+		data.argument_sizes.push_back(size);
+		offset += size;
 	}
 
 	if (!functions.emplace(owner, data.id).second)
@@ -349,6 +351,14 @@ std::vector<VMInstruction> IRLoader::decode_function_instructions(bool terminate
 					std::bit_cast<std::uint32_t>(instruction.operands.i32[i]);
 			}
 		}
+
+		if (opcode == OP_ADD_CHILD && instruction.operands.u32[0] > 1)
+			reader_error("invalid add_child receiver");
+
+		if (opcode == OP_CONVERT &&
+			(instruction.operands.u32[0] < static_cast<unsigned>(VMOPType::OPRND_INT32) ||
+			 instruction.operands.u32[0] > static_cast<unsigned>(VMOPType::OPRND_VEC)))
+			reader_error("invalid conversion type");
 
 		if (opcode == OP_NEW_OBJECT || opcode == OP_CALL_SUPER) {
 			unsigned id = instruction.operands.u32[0];

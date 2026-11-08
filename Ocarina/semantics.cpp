@@ -9,6 +9,11 @@ static unsigned add_size(const ParserContext &pc, unsigned offset, unsigned size
 	return offset + size;
 }
 
+static bool is_super_call(const Node &node) {
+	return node.type == AST_FunctionCall &&
+		std::get<FuncCallAST>(node.ast).func_name_tok.str == "super";
+}
+
 void SemanticsContext::register_objects(ParserContext &pc) {
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
@@ -44,6 +49,8 @@ std::size_t SemanticsContext::register_func_data(ParserContext &pc, const Token 
 	data.func_name = func_name.str;
 	data.return_type = ret_type;
 	data.is_constructor = is_constructor;
+	if (object_id != NoNode && !is_constructor && func_name.str == "add_child")
+		panic("add_child is a built-in object method.", pc.tc);
 	data.scope_data = object_id == NoNode ? ScopeGlobal : ScopeObject;
 	const VarDeclBundleAST &params_ast = std::get<VarDeclBundleAST>(pc.get_node(params).ast);
 	for (const Node &param : params_ast.var_decls) {
@@ -138,13 +145,16 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 	if (state.at(object_id) == 2) return;
 	if (state[object_id] == 1) panic("Cyclic object inheritance.", pc.tc);
 	state[object_id] = 1;
+
 	ObjectData &object_data = pc.object_data.at(object_id);
-	unsigned offset = 0;
+	unsigned offset = (4 * 3 + 4 * 2 + 4); // position (float * 3), size (float * 2), rotation (float)
+
 	if (!object_data.parent_type.type_str.empty()) {
 		std::size_t parent_id = object_data.parent_type.data.object_data;
 		layout_object(pc, parent_id, state);
-		offset = pc.object_data.at(parent_id).instance_size;
+		offset += pc.object_data.at(parent_id).instance_size;
 	}
+
 	// Symbol IDs follow declaration order; hash-table iteration does not define layout.
 	for (VarData &var_data : pc.var_data) {
 		auto member = object_data.member_vars.find(var_data.var_name);
@@ -153,6 +163,7 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 		offset = add_size(pc, offset, var_data.type.nbyte);
 		member->second = var_data;
 	}
+
 	object_data.instance_size = offset;
 
 	unsigned next_function_id = 1;
@@ -181,12 +192,14 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 			}
 			parent = base.parent_type;
 		}
+
 		if (function.is_constructor)
 			function.id = 0;
 		else if (inherited_id != 0)
 			function.id = inherited_id;
 		else
 			function.id = next_function_id++;
+
 		object_data.member_funcs[function.func_name] = function;
 		if (function.is_constructor)
 			object_data.constructor = function;
@@ -272,6 +285,38 @@ void SemanticsContext::check_child(ParserContext &pc, NodeId id) {
 	if (id != NoNode) check_semantics(pc, pc.get_node(id));
 }
 
+void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &expected) {
+	check_semantics(pc, node);
+	Type actual = infer_type(pc, node);
+	if (actual.type_str == expected.type_str)
+		return;
+	if (actual.type_kind == TK_Null && (expected.type_kind == TK_Object ||
+		expected.type_str == "string" || expected.type_str == "window"))
+		return;
+	const auto scalar = [](const Type &type) {
+		return type.type_kind == TK_Numeric || type.type_str == "bool" || type.type_str == "char";
+	};
+	if (scalar(actual) && (scalar(expected) || expected.type_str == "vector"))
+		return;
+	while (actual.type_kind == TK_Object && actual.type_str != expected.type_str)
+		actual = pc.object_data.at(actual.data.object_data).parent_type;
+	if (actual.type_str != expected.type_str)
+		panic("Incompatible value type: expected " + expected.type_str + ".", pc.tc);
+}
+
+void SemanticsContext::bind_add_child(ParserContext &pc, Node &node, FuncCallAST &call) {
+	if (call.params.size() != 1)
+		panic("add_child requires one object argument.", pc.tc);
+	check_semantics(pc, call.params.front());
+	if (infer_type(pc, call.params.front()).type_kind != TK_Object)
+		panic("add_child requires an object argument.", pc.tc);
+	if (node.attr != NoNode)
+		panic("add_child has no return value.", pc.tc);
+	call.is_add_child = true;
+	call.is_syscall = false;
+	call.func_data = NoNode;
+}
+
 void SemanticsContext::check_semantics_body(ParserContext &pc, std::vector<Node> &body) {
 	open_scope();
 	for (Node &node : body) check_semantics(pc, node);
@@ -282,6 +327,8 @@ void SemanticsContext::check_function(ParserContext &pc, NodeId params, std::vec
 	std::size_t func_id, std::vector<std::size_t> &declared_vars) {
 	if (current_func != NoNode) panic("Nested function declarations are not supported.", pc.tc);
 	current_func = func_id;
+	constructor_first_statement = pc.func_data.at(func_id).is_constructor && !body.empty()
+		? &body.front() : nullptr;
 	stack_offset = 0;
 	declared_local_vars.clear();
 	open_scope();
@@ -291,14 +338,23 @@ void SemanticsContext::check_function(ParserContext &pc, NodeId params, std::vec
 	close_scope();
 	declared_vars = declared_local_vars;
 	current_func = NoNode;
+	constructor_first_statement = nullptr;
+}
+
+std::size_t SemanticsContext::bind_super_call(ParserContext &pc, const Node &node) const {
+	if (current_object == NoNode || current_func == NoNode ||
+		!pc.func_data.at(current_func).is_constructor)
+		panic("super() is only allowed in a child constructor.", pc.tc);
+	const Type &parent = pc.object_data.at(current_object).parent_type;
+	if (parent.type_str.empty() || !pc.object_data.at(parent.data.object_data).constructor.is_constructor)
+		panic("super() requires a parent constructor.", pc.tc);
+	if (&node != constructor_first_statement || node.attr != NoNode)
+		panic("super() must be called exactly once as the first constructor statement.", pc.tc);
+	return parent.data.object_data;
 }
 
 void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node) {
 	if (node.attr == NoNode) return;
-	if (type_of_node.type_kind == TK_Array) {
-		bind_array_attr(pc, type_of_node, pc.get_node(node.attr));
-		return;
-	}
 	if (type_of_node.type_kind != TK_Object) panic("Attribute access requires an object type.", pc.tc);
 	register_attr_data(pc, type_of_node.data.object_data, pc.get_node(node.attr));
 }
@@ -314,6 +370,11 @@ void SemanticsContext::register_attr_data(ParserContext &pc, std::size_t attr_of
 	}
 	else if (node.type == AST_FunctionCall) {
 		FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
+		if (func_call_ast.func_name_tok.str == "add_child") {
+			func_call_ast.is_attr = true;
+			bind_add_child(pc, node, func_call_ast);
+			return;
+		}
 		func_call_ast.func_data = find_member_func_data(pc, attr_of, func_call_ast.func_name_tok.str);
 		if (func_call_ast.func_data == NoNode) panic("Unknown member function: " + func_call_ast.func_name_tok.str, pc.tc);
 		func_call_ast.is_attr = true;
@@ -335,6 +396,16 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		ObjectAST &object_ast = std::get<ObjectAST>(node.ast);
 		if (current_func != NoNode || object_ast.object_data == NoNode) panic("Nested object declarations are not supported.", pc.tc);
 		current_object = object_ast.object_data;
+		const Type &parent = pc.object_data.at(current_object).parent_type;
+		if (!parent.type_str.empty() && pc.object_data.at(parent.data.object_data).constructor.is_constructor) {
+			const auto constructor = std::find_if(object_ast.body.begin(), object_ast.body.end(),
+				[](const Node &member) { return member.type == AST_Constructor; });
+			if (constructor == object_ast.body.end())
+				panic("A child object must declare a constructor that calls super().", pc.tc);
+			const auto &body = std::get<ConstructorAST>(constructor->ast).body;
+			if (body.empty() || !is_super_call(body.front()))
+				panic("A child constructor must call super() as its first statement.", pc.tc);
+		}
 		for (Node &member : object_ast.body) check_semantics(pc, member);
 		current_object = NoNode;
 		break;
@@ -368,16 +439,29 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 	}
 	case AST_FunctionCall: {
 		FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
-		func_call_ast.func_data = find_func_data(pc, func_call_ast.func_name_tok.str);
-		func_call_ast.is_syscall = func_call_ast.func_data == NoNode &&
-			pc.syscall_smtb.contains(func_call_ast.func_name_tok.str);
+		if (current_object != NoNode && func_call_ast.func_name_tok.str == "add_child") {
+			bind_add_child(pc, node, func_call_ast);
+			break;
+		}
+		if (is_super_call(node)) {
+			func_call_ast.super_object = bind_super_call(pc, node);
+			func_call_ast.func_data = pc.object_data.at(func_call_ast.super_object).constructor.symbol_id;
+			func_call_ast.is_syscall = false;
+		} else {
+			func_call_ast.func_data = find_func_data(pc, func_call_ast.func_name_tok.str);
+			func_call_ast.is_syscall = func_call_ast.func_data == NoNode &&
+				pc.syscall_smtb.contains(func_call_ast.func_name_tok.str);
+		}
 
 		if (func_call_ast.func_data == NoNode && !func_call_ast.is_syscall)
 			panic("Unknown function: " + func_call_ast.func_name_tok.str, pc.tc);
 
 		const FuncData &func_data = pc.get_func_data(func_call_ast);
-		if (func_data.is_constructor) panic("Constructor requires new.", pc.tc);
-		if (!func_data.varargs && func_data.arg_count != func_call_ast.params.size()) panic("Wrong function argument count.", pc.tc);
+		if (func_data.is_constructor && func_call_ast.super_object == NoNode)
+			panic("Constructors must be called with new or super().", pc.tc);
+		if (!func_data.varargs && func_data.arg_count != func_call_ast.params.size())
+			panic(func_call_ast.super_object != NoNode ? "Wrong super() parameter count."
+				: "Wrong function argument count.", pc.tc);
 		for (std::size_t i = 0; i < func_call_ast.params.size(); ++i) {
 			if (func_data.varargs)
 				check_semantics(pc, func_call_ast.params[i]);
@@ -394,14 +478,43 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 	case AST_BinExpr: {
 		BinExprAST &bin_expr_ast = std::get<BinExprAST>(node.ast);
 		check_child(pc, bin_expr_ast.left);
-		if (bin_expr_ast.op_type == OpASSIGN) {
+		if (is_assignment_op(bin_expr_ast.op_type)) {
 			const Node &left = pc.get_node(bin_expr_ast.left);
-			if (left.type != AST_Identifier && left.type != AST_ArrayAccess)
-				panic("Assignment requires a variable, member or array element.", pc.tc);
-			check_value(pc, pc.get_node(bin_expr_ast.right), infer_type(pc, left),
-				left.type == AST_ArrayAccess && left.attr == NoNode);
-		} else
+			const Node *target = &left;
+			while (target->attr != NoNode) target = &pc.get_node(target->attr);
+			if (target->type != AST_Identifier)
+				panic("Assignment requires a variable or member.", pc.tc);
+			if (bin_expr_ast.op_type != OpASSIGN) {
+				check_child(pc, bin_expr_ast.right);
+				const Type lhs = infer_type(pc, left);
+				const Type rhs = infer_type(pc, pc.get_node(bin_expr_ast.right));
+				if ((lhs.type_kind != TK_Numeric && lhs.type_str != "vector") ||
+					(rhs.type_kind != TK_Numeric && rhs.type_str != "vector") ||
+					(lhs.type_str != "vector" && rhs.type_str == "vector"))
+					panic("Compound assignment requires compatible numeric or vector operands.", pc.tc);
+			}
+			check_value(pc, pc.get_node(bin_expr_ast.right), infer_type(pc, left));
+		}
+		else {
 			check_child(pc, bin_expr_ast.right);
+			const Type lhs = infer_type(pc, pc.get_node(bin_expr_ast.left));
+			const Type rhs = infer_type(pc, pc.get_node(bin_expr_ast.right));
+			const auto numeric = [](const Type &type) {
+				return type.type_kind == TK_Numeric || type.type_str == "bool" ||
+					type.type_str == "char" || type.type_str == "vector";
+			};
+			const bool logical = bin_expr_ast.op_type == OpAND || bin_expr_ast.op_type == OpOR;
+			const bool equality = bin_expr_ast.op_type == OpEQUAL || bin_expr_ast.op_type == OpNOTEQUAL;
+			const auto reference = [](const Type &type) {
+				return type.type_kind == TK_Object ||
+					type.type_str == "string" || type.type_str == "window" || type.type_kind == TK_Null;
+			};
+			if (numeric(lhs) && numeric(rhs)) {
+				if (logical && (lhs.type_str == "vector" || rhs.type_str == "vector"))
+					panic("Logical operators do not support vectors.", pc.tc);
+			} else if (!(equality && reference(lhs) && reference(rhs)))
+				panic("Incompatible operand types for binary operator.", pc.tc);
+		}
 		break;
 	}
 	case AST_UnaryExpr: check_child(pc, std::get<UnaryExprAST>(node.ast).expr); break;
@@ -445,17 +558,21 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		resolve_attr(pc, type, node);
 		break;
 	}
-	case AST_ArrayDeclaration:
-		check_array_literal(pc, std::get<ArrayDeclAST>(node.ast));
-		resolve_attr(pc, find_type(pc, std::get<ArrayDeclAST>(node.ast).ele_type_tok.str), node);
-		break;
-	case AST_ArrayAccess:
-		check_array_access(pc, node);
-		break;
 	case AST_None: case AST_NumberLiteral: case AST_StringLiteral: case AST_BoolLiteral: case AST_Null:
 		break;
 	default: panic("Unsupported AST in semantic preparation.", pc.tc);
 	}
+}
+
+Type SemanticsContext::infer_operation_type(const ParserContext &pc,
+	const Type &lhs, const Type &rhs) const {
+	if (lhs.type_str == "vector" || rhs.type_str == "vector")
+		return find_type(pc, "vector");
+	if (lhs.type_str == "double" || rhs.type_str == "double")
+		return find_type(pc, "double");
+	if (lhs.type_str == "float" || rhs.type_str == "float")
+		return find_type(pc, "float");
+	return find_type(pc, "int");
 }
 
 Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) const {
@@ -467,20 +584,11 @@ Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) con
 	case AST_Null: return find_type(pc, "null");
 	case AST_Identifier: {
 		const IdentifierAST &ident = std::get<IdentifierAST>(node.ast);
-		return ident.is_array_length ? find_type(pc, "int") : pc.var_data.at(ident.var_data).type;
+		return pc.var_data.at(ident.var_data).type;
 	}
 	case AST_FunctionCall: {
 		const FuncCallAST &call = std::get<FuncCallAST>(node.ast);
-		return call.is_array ? find_type(pc, "void") : pc.get_func_data(call).return_type;
-	}
-	case AST_ArrayDeclaration:
-		return find_type(pc, std::get<ArrayDeclAST>(node.ast).ele_type_tok.str);
-	case AST_ArrayAccess: {
-		const ArrayAccessAST &access = std::get<ArrayAccessAST>(node.ast);
-		Type type = infer_type(pc, pc.get_node(access.target_array));
-		for (std::size_t i = 0; i < access.indexes.size(); ++i)
-			type = array_element_type(pc, type);
-		return type;
+		return call.is_add_child ? find_type(pc, "void") : pc.get_func_data(call).return_type;
 	}
 	case AST_New:
 		return pc.object_data.at(std::get<NewAST>(node.ast).object_data).object_type;
@@ -490,8 +598,13 @@ Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) con
 	case AST_Negative: return infer_type(pc, pc.get_node(std::get<NegAST>(node.ast).ast));
 	case AST_BinExpr: {
 		const BinExprAST &bin_expr_ast = std::get<BinExprAST>(node.ast);
-		if (bin_expr_ast.op_type >= OpEQUAL && bin_expr_ast.op_type != OpASSIGN) return find_type(pc, "bool");
-		return infer_type(pc, pc.get_node(bin_expr_ast.left));
+		if ((bin_expr_ast.op_type >= OpEQUAL && bin_expr_ast.op_type <= OpEQUALLESS) ||
+			bin_expr_ast.op_type == OpOR || bin_expr_ast.op_type == OpAND)
+			return find_type(pc, "bool");
+		const Type lhs = infer_type(pc, pc.get_node(bin_expr_ast.left));
+		if (is_assignment_op(bin_expr_ast.op_type))
+			return lhs;
+		return infer_operation_type(pc, lhs, infer_type(pc, pc.get_node(bin_expr_ast.right)));
 	}
 	default: panic("Cannot infer expression type.", pc.tc);
 	}
@@ -499,6 +612,7 @@ Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) con
 
 void SemanticsContext::resolve_semantics(ParserContext &pc) {
 	scopes.clear(); current_scope = NoNode; current_object = NoNode; current_func = NoNode;
+	constructor_first_statement = nullptr;
 	stack_offset = 0; global_offset = 0;
 	pc.glob_var_smtb.clear(); pc.glob_func_smtb.clear(); pc.object_type_smtb.clear();
 	pc.object_data.clear(); pc.func_data.clear(); pc.var_data.clear();
@@ -506,11 +620,11 @@ void SemanticsContext::resolve_semantics(ParserContext &pc) {
 	register_objects(pc);
 
 	for (Node &node : pc.nodes) register_data(pc, node, NoNode);
-	
+
 	std::vector<unsigned> state(pc.object_data.size(), 0);
-	
+
 	for (std::size_t i = 0; i < pc.object_data.size(); ++i) layout_object(pc, i, state);
-	
+
 	for (Node &node : pc.nodes) check_semantics(pc, node);
 }
 

@@ -1,0 +1,112 @@
+var trace: int = 0;
+var argument_calls: int = 0;
+var empty_calls: int = 0;
+
+func mark(step: int): int {
+    trace = trace * 10 + step;
+    return step;
+}
+
+func next_argument(): int {
+    argument_calls += 1;
+    return argument_calls;
+}
+
+// Parents are deliberately declared after their children.
+object Leaf extends Middle {
+    var leaf_initial: int = mark(3);
+
+    constructor Leaf(seed: float) {
+        super(seed + 1);
+        value += 1;
+        mark(6);
+    }
+}
+
+object Middle extends Root {
+    var middle_initial: int = mark(2);
+
+    constructor Middle(seed: double) {
+        super(true, 65, 3.75, 4, seed, 2, "chain");
+        value += 0.5;
+        mark(5);
+    }
+}
+
+object Root {
+    var root_initial: int = mark(1);
+    var flag: bool;
+    var letter: char;
+    var integral: int;
+    var real: float;
+    var value: double;
+    var direction: vector;
+    var text: string;
+
+    constructor Root(enabled: bool, symbol: char, count: int, ratio: float,
+                     total: double, axis: vector, name: string) {
+        flag = enabled;
+        letter = symbol;
+        integral = count;
+        real = ratio;
+        value = total;
+        direction = axis;
+        text = name;
+        mark(4);
+        return;
+    }
+
+    func read(): double {
+        return value;
+    }
+}
+
+object ArgumentsParent {
+    var value: int;
+
+    constructor ArgumentsParent(first: int, second: int) {
+        value = first * 10 + second;
+    }
+}
+
+object ArgumentsChild extends ArgumentsParent {
+    constructor ArgumentsChild() {
+        super(next_argument(), next_argument());
+    }
+}
+
+object EmptyParent {
+    constructor EmptyParent() {
+        empty_calls += 1;
+    }
+}
+
+object EmptyChild extends EmptyParent {
+    constructor EmptyChild() {
+        super();
+    }
+}
+
+object PlainParent {
+    var value: int = 7;
+}
+
+object PlainChild extends PlainParent {}
+
+func main(): void {
+    var leaf: Leaf = new Leaf(4);
+    var root: Root = leaf;
+    print("chain:", trace, ",", leaf.root_initial, ",", leaf.middle_initial, ",",
+          leaf.leaf_initial, ",", leaf.value, ",", root.read(), "\n");
+    print("arguments:", leaf.flag, ",", leaf.letter, ",", leaf.integral, ",",
+          leaf.real, ",", leaf.direction, ",", leaf.text, "\n");
+    trace = 0;
+    var other: Leaf = new Leaf(10);
+    root.value += 1;
+    print("instances:", trace, ",", leaf.value, ",", other.value, ",", leaf != other, "\n");
+    var arguments: ArgumentsChild = new ArgumentsChild();
+    print("evaluation:", arguments.value, ",", argument_calls, "\n");
+    var empty: EmptyChild = new EmptyChild();
+    var plain: PlainChild = new PlainChild();
+    print("empty:", empty_calls, ",", plain.value, "\n");
+}

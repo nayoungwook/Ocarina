@@ -1,8 +1,44 @@
+# Build outputs and test scratch files
 /build/
 /build-*/
-/.vs/
 /x64/
+/Debug/
+/Release/
 /Ocarina/x64/
 /Ocarina/Debug/
 /Ocarina/Release/
+
+# Visual Studio local settings and caches
+.vs/
 *.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.db-shm
+*.VC.db-wal
+ipch/
+
+# Compiler intermediate files
+*.obj
+*.pch
+*.ipch
+*.idb
+*.ilk
+*.tlog
+*.lastbuildstate
+
+# Wavefront model assets also use the .obj extension
+!/Ocarina/engine/resources/**/*.obj
+
+# Editor backups and temporary files
+*~
+\#*#
+.#*
+*.swp
+*.swo
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store

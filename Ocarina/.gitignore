@@ -1,0 +1,8 @@
+/build/
+/build-*/
+/.vs/
+/x64/
+/Ocarina/x64/
+/Ocarina/Debug/
+/Ocarina/Release/
+*.vcxproj.user

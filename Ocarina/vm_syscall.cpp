@@ -85,6 +85,7 @@ VMOperand SyscallContext::vector(std::span<const VMOperand> arguments) const {
 
 	VMOperand result;
 	result.op_type = VMOPType::OPRND_VEC;
+	result.val = VMNumericValue{};
 
 	for (std::size_t i = 0; i < arguments.size(); ++i)
 		result.val.v[i] = numeric_operand_to_float(arguments[i]);
@@ -100,7 +101,7 @@ VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
 		throw std::runtime_error("window expects (string, int, int).");
 
 	VMOperand result;
-	result.op_type = VMOPType::OPRND_WINDOW;
+	result.op_type = VMOPType::OPRND_ADDRESS;
 
 	const std::string &title =
 		vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
@@ -108,7 +109,7 @@ VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
 	const int height = arguments[2].val.i32;
 
 	vm.engine.init_window(title, width, height);
-	result.val.u64 = 1;
+	result.val.i32 = 1;
 
 	return result;
 }

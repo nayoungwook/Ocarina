@@ -1,5 +1,7 @@
 #include "ir.h"
 #include "error.h"
+#include "code_data.h"
+#include "vm_opcode.h"
 
 #include <bit>
 #include <charconv>
@@ -155,13 +157,20 @@ RODATA_Str IRContext::add_str_rodata(const std::string &str) {
 byte IRContext::get_op_byte(OperatorType op_type) const {
 	switch (op_type) {
 	case OpADD:
+	case OpPLUSASSIGN:
 		return OP_ADD;
 	case OpSUB:
+	case OpMINUSASSIGN:
 		return OP_SUB;
 	case OpMUL:
+	case OpMULTASSIGN:
 		return OP_MUL;
 	case OpDIV:
+	case OpDIVASSIGN:
 		return OP_DIV;
+	case OpMOD:
+	case OpMODASSIGN:
+		return OP_MOD;
 	case OpEQUAL:
 		return OP_EQUAL;
 	case OpNOTEQUAL:
@@ -263,10 +272,6 @@ void IRContext::gen_ident_update_ir(const VarData &var_data, bool is_attr, bool 
 
 void IRContext::gen_ident_ir(const Node &node, bool value_required) {
 	const IdentifierAST &ident_ast = std::get<IdentifierAST>(node.ast);
-	if (ident_ast.is_array_length) {
-		emit_byte(OP_ARRAY_LENGTH);
-		return;
-	}
 	gen_ident_load_ir(pc.var_data.at(ident_ast.var_data), ident_ast.is_attr);
 	if (node.attr != NoNode)
 		gen_child_ir(node.attr, value_required);
@@ -274,8 +279,8 @@ void IRContext::gen_ident_ir(const Node &node, bool value_required) {
 
 const Node &IRContext::gen_assignment_target(const Node &node) {
 	if (node.attr == NoNode) {
-		if (node.type != AST_Identifier && node.type != AST_ArrayAccess)
-			panic("Assignment requires a variable, member or array element.", pc.tc);
+		if (node.type != AST_Identifier)
+			panic("Assignment requires a variable or member.", pc.tc);
 		return node;
 	}
 	Node receiver = node;
@@ -317,7 +322,8 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 }
 
 void IRContext::gen_zero(const Type &type) {
-	if (type.type_kind == TK_Object || type.type_kind == TK_Array || type.type_str == "string")
+	if (type.type_kind == TK_Object ||
+		type.type_str == "string" || type.type_str == "window")
 		emit_byte(OP_PUSH_NULL);
 	else if (type.type_str == "float") {
 		emit_byte(OP_LDC_F4);
@@ -345,6 +351,21 @@ void IRContext::emit_jump(byte op, unsigned label) {
 void IRContext::gen_child_ir(NodeId id, bool value_required) {
 	if (id != NoNode)
 		gen_node_ir(pc.get_node(id), value_required);
+}
+
+void IRContext::gen_conversion(const Type &source, const Type &target) {
+	const VMOPType from = vm_operand_type(source.type_str);
+	const VMOPType to = vm_operand_type(target.type_str);
+	// Reference upcasts and null assignments do not change the stored payload.
+	if (from == to || from == VMOPType::OPRND_NULL)
+		return;
+	emit_byte(OP_CONVERT);
+	emit_int(static_cast<unsigned>(to));
+}
+
+void IRContext::gen_value_ir(const Node &node, const Type &target) {
+	gen_node_ir(node, true);
+	gen_conversion(semantics.infer_type(pc, node), target);
 }
 
 void IRContext::gen_function_ir(const FuncData &func_data,
@@ -403,6 +424,7 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 	case AST_BoolLiteral:
 		emit_byte(OP_LDC_I4);
 		emit_int(std::get<BoolLiteralAST>(node.ast).bool_tok.type == TokenType::TokTrue ? 1 : 0);
+		gen_conversion(find_type(pc, "int"), find_type(pc, "bool"));
 		break;
 	case AST_StringLiteral: {
 		const StringLiteralAST &str_lit_ast = std::get<StringLiteralAST>(node.ast);
@@ -440,33 +462,43 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		const VarDeclAST &var_decl_ast = std::get<VarDeclAST>(node.ast);
 		const VarData &var_data = pc.var_data.at(var_decl_ast.var_data);
 		if (var_decl_ast.decl != NoNode)
-			gen_child_ir(var_decl_ast.decl);
-		else
+			gen_value_ir(pc.get_node(var_decl_ast.decl), var_data.type);
+		else {
 			gen_zero(var_data.type);
+			if (var_data.type.type_str == "bool" || var_data.type.type_str == "char" ||
+				var_data.type.type_str == "vector")
+				gen_conversion(find_type(pc, "int"), var_data.type);
+		}
 		gen_ident_save_ir(var_data, false);
 		break;
 	}
 	case AST_BinExpr: {
 		const BinExprAST &bin_expr_ast = std::get<BinExprAST>(node.ast);
-		if (bin_expr_ast.op_type == OpASSIGN) {
+		if (is_assignment_op(bin_expr_ast.op_type)) {
+			const bool compound = bin_expr_ast.op_type != OpASSIGN;
 			const Node &left = pc.get_node(bin_expr_ast.left);
 			if (value_required && left.attr != NoNode)
 				panic("Member assignment cannot be used as a value in this IR.", pc.tc);
 			const Node &target = gen_assignment_target(left);
-			if (target.type == AST_ArrayAccess) {
-				if (value_required)
-					panic("Array assignment cannot be used as a value.", pc.tc);
-				gen_array_access_ir(target, false);
-				gen_child_ir(bin_expr_ast.right);
-				emit_byte(OP_ARRAY_SAVE);
-				emit_int(semantics.infer_type(pc, target).nbyte);
-				break;
-			}
 			const IdentifierAST &ident_ast = std::get<IdentifierAST>(target.ast);
-			if (ident_ast.is_array_length)
-				panic("Array length is read-only.", pc.tc);
 			const VarData &var_data = pc.var_data.at(ident_ast.var_data);
+			if (compound) {
+				if (ident_ast.is_attr) {
+					// Keep the evaluated receiver for the store.
+					emit_byte(OP_DUP);
+					emit_int(1);
+				}
+				gen_ident_load_ir(var_data, ident_ast.is_attr);
+			}
 			gen_child_ir(bin_expr_ast.right);
+			if (compound) {
+				emit_byte(OP_EXPR_OP);
+				emit_byte(get_op_byte(bin_expr_ast.op_type));
+				gen_conversion(semantics.infer_operation_type(pc, var_data.type,
+					semantics.infer_type(pc, pc.get_node(bin_expr_ast.right))), var_data.type);
+			}
+			else
+				gen_conversion(semantics.infer_type(pc, pc.get_node(bin_expr_ast.right)), var_data.type);
 			gen_ident_save_ir(var_data, ident_ast.is_attr);
 			if (value_required)
 				gen_ident_load_ir(var_data, false);
@@ -519,8 +551,12 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		break;
 	case AST_FunctionCall: {
 		const FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
-		if (func_call_ast.is_array) {
-			gen_array_call_ir(func_call_ast, value_required);
+		if (func_call_ast.is_add_child) {
+			if (value_required)
+				panic("add_child has no return value.", pc.tc);
+			gen_node_ir(func_call_ast.params.front(), true);
+			emit_byte(OP_ADD_CHILD);
+			emit_int(func_call_ast.is_attr ? 1 : 0);
 			break;
 		}
 		const FuncData &func_data = pc.get_func_data(func_call_ast);
@@ -528,8 +564,19 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		if (value_required && node.attr == NoNode && func_data.return_type.type_str == "void")
 			panic("Void call cannot be used as a value.", pc.tc);
 
-		for (const Node &param : func_call_ast.params)
-			gen_node_ir(param, true);
+		for (std::size_t i = 0; i < func_call_ast.params.size(); ++i) {
+			if (func_data.varargs)
+				gen_node_ir(func_call_ast.params[i], true);
+			else
+				gen_value_ir(func_call_ast.params[i], func_data.arg_types.at(i));
+		}
+
+		if (func_call_ast.super_object != NoNode) {
+			emit_byte(OP_CALL_SUPER);
+			emit_int(pc.object_data.at(func_call_ast.super_object).id);
+			emit_int(static_cast<unsigned>(func_call_ast.params.size()));
+			break;
+		}
 
 		if (func_call_ast.is_attr)
 			emit_byte(OP_CALL_ATTR);
@@ -579,7 +626,7 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		if ((expr == NoNode) != (type.type_str == "void"))
 			panic("Return value does not match void/non-void signature.", pc.tc);
 		if (expr != NoNode) {
-			gen_child_ir(expr);
+			gen_value_ir(pc.get_node(expr), type);
 			emit_byte(OP_RET_VAL);
 		}
 		if (return_label == NoNode)
@@ -591,12 +638,14 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		const NewAST &new_ast = std::get<NewAST>(node.ast);
 		const ObjectData &object = pc.object_data.at(new_ast.object_data);
 		const FuncData &constructor = object.constructor;
+
 		const unsigned argument_count = static_cast<unsigned>(new_ast.params.size());
+
 		if (argument_count != (constructor.is_constructor ? constructor.arg_count : 0))
 			panic("Wrong constructor argument count.", pc.tc);
 
-		for (const Node &param : new_ast.params)
-			gen_node_ir(param, true);
+		for (std::size_t i = 0; i < new_ast.params.size(); ++i)
+			gen_value_ir(new_ast.params[i], constructor.arg_types.at(i));
 
 		emit_byte(OP_NEW_OBJECT);
 		emit_int(object.id);
@@ -607,16 +656,6 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			gen_child_ir(node.attr, value_required);
 		break;
 	}
-	case AST_ArrayDeclaration:
-		gen_array_decl_ir(std::get<ArrayDeclAST>(node.ast));
-		if (node.attr != NoNode)
-			gen_child_ir(node.attr, value_required);
-		break;
-	case AST_ArrayAccess:
-		gen_array_access_ir(node);
-		if (node.attr != NoNode)
-			gen_child_ir(node.attr, value_required);
-		break;
 	}
 }
 

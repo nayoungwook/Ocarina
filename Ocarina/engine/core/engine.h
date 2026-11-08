@@ -56,6 +56,8 @@ class Engine {
         void set_scene(Scene *scene);
 		void set_after_scene_update(std::function<void(Engine *)> callback);
         void start();
+        // Run one frame on the SDL/main thread. False means closed or inactive.
+        bool run_frame();
 
         void init_window(const std::string &title, int width, int height);
         void init_engine();
@@ -78,5 +80,9 @@ class Engine {
         Input *input = nullptr;
         bool automatic_presentation = true;
         bool sdl_initialized = false;
+        bool loop_started = false;
+        Uint64 previous_frame = 0;
+        double update_lag = 0.0, fps_timer = 0.0;
+        int frame_count = 0, tick_count = 0;
         LightSystem lights;
 };

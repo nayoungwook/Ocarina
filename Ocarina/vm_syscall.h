@@ -8,15 +8,17 @@
 
 class CVM;
 
-struct VMNumericValue {
-	std::int32_t i32 = 0;
-	std::uint64_t u64 = 0;
-	float f32 = 0;
-	double f64 = 0;
-	std::array<float, 4> v{};
+union VMNumericValue {
+	std::int32_t i32;
+	std::uint64_t u64;
+	float f32;
+	double f64;
+	float v[4]{};
 };
 
 struct VMOperand {
+	VMOperand() { val.i32 = 0; }
+
 	VMOPType op_type = VMOPType::OPRND_NULL;
 	VMNumericValue val;
 };

@@ -2,6 +2,7 @@
 #include "vm_numeric.h"
 #include "vm_opcode.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 static constexpr unsigned VM_STACK_SIZE = 1024 * 1024;
@@ -14,7 +15,7 @@ VMFrame::VMFrame(const VMFunctionData &function_data) : function_data(function_d
 void CVM::clear_execution() {
 	frames.clear();
 	vm_stack.clear();
-	heap_mapper.clear();
+	hierarchy.reset();
 	globals = {};
 	stack_size = 0;
 	syscalls.reset();
@@ -51,21 +52,21 @@ std::vector<VMOperand> CVM::update_function_arguments(unsigned argument_count) {
 
 void CVM::call_function(const VMFunctionData &function_data,
 						unsigned argument_count,
-						unsigned heap_index,
+						unsigned hierarchy_index,
 						bool receiver) {
 	std::vector<VMOperand> arguments = update_function_arguments(argument_count);
 	if (receiver) {
 		const VMOperand object = vm_stack_pop();
-		find_heap_object(object);
-		if (static_cast<unsigned>(object.val.i32) != heap_index)
+		find_object(object);
+		if (static_cast<unsigned>(object.val.i32) != hierarchy_index)
 			throw std::runtime_error("Invalid method receiver.");
 	}
-	push_frame(function_data, std::move(arguments), heap_index);
+	push_frame(function_data, std::move(arguments), hierarchy_index);
 }
 
 void CVM::push_frame(const VMFunctionData &function_data,
 					 std::vector<VMOperand> arguments,
-					 unsigned heap_index) {
+					 unsigned hierarchy_index) {
 	if (!function_data.code_loaded)
 		throw std::runtime_error("Function code is not loaded: " + function_data.name);
 	if (arguments.size() != function_data.argument_count)
@@ -74,16 +75,14 @@ void CVM::push_frame(const VMFunctionData &function_data,
 		throw std::runtime_error("VM call stack overflow.");
 
 	VMFrame frame(function_data);
-	frame.data.size = function_data.stack_size;
-	frame.data.types = function_data.local_types;
-	frame.heap_index = heap_index;
+	frame.data.resize(function_data.stack_size);
+	frame.hierarchy_index = hierarchy_index;
 	frame.operand_base = vm_stack.size();
 
 	unsigned offset = 0;
 	for (std::size_t i = 0; i < arguments.size(); ++i) {
-		const VMOPType target = vm_operand_type(function_data.argument_types.at(i));
-		const unsigned size = get_operand_size(target);
-		frame.data.save(offset, size, convert_argument(arguments[i], target));
+		const unsigned size = function_data.argument_sizes[i];
+		frame.data.save(offset, size, arguments[i]);
 		offset += size;
 	}
 
@@ -102,7 +101,7 @@ std::optional<VMOperand> CVM::finish_frame() {
 				throw std::runtime_error("Function did not return a value.");
 			frame.return_value = vm_stack_pop();
 		}
-		result = convert_argument(*frame.return_value, vm_operand_type(function_data.return_type));
+		result = *frame.return_value;
 	}
 	if (frame.result_override)
 		result = frame.result_override;
@@ -124,7 +123,7 @@ std::optional<VMOperand> CVM::vm_exec_function(const VMFunctionData &function_da
 
 			if (!finished) {
 				const VMInstruction &instruction = instructions.at(frame.instruction_index++);
-				exec_instruction(instruction, frame.instruction_index, frame, frame.heap_index);
+				exec_instruction(instruction, frame.instruction_index, frame, frame.hierarchy_index);
 				finished = instruction.opcode == OP_RET;
 			}
 			if (!finished)
@@ -151,7 +150,7 @@ std::optional<VMOperand> CVM::vm_exec_function(const VMFunctionData &function_da
 	return std::nullopt;
 }
 
-std::optional<VMOperand> CVM::run(std::ostream &out) {
+std::optional<VMOperand> CVM::run(std::ostream &out, RunMode mode) {
 	if (syscalls)
 		throw std::runtime_error("This CVM is already running.");
 	clear_execution();
@@ -161,10 +160,10 @@ std::optional<VMOperand> CVM::run(std::ostream &out) {
 	output = std::ref(out);
 
 	try {
-		heap_mapper.emplace_back();
-		globals.size = VM_STACK_SIZE;
+		unsigned global_size = 0;
 		for (const auto &[id, variable] : variable_data)
-			globals.types[variable.offset] = variable.operand_type;
+			global_size = std::max(global_size, variable.offset + variable.size);
+		globals.resize(global_size);
 		const auto entry = function_data.find(main_func_id);
 		if (entry == function_data.end())
 			throw std::runtime_error("Bytecode has no main function.");
@@ -174,10 +173,11 @@ std::optional<VMOperand> CVM::run(std::ostream &out) {
 		if (initializer.code_loaded)
 			vm_exec_function(initializer);
 		const auto result = vm_exec_function(entry->second);
-		if (engine.get_display() != nullptr)
-			engine.start();
-
-		engine.shutdown();
+		if (mode == RunMode::WaitForWindow) {
+			if (engine.get_display() != nullptr)
+				engine.start();
+			engine.shutdown();
+		}
 		clear_execution();
 		return result;
 	} catch (...) {

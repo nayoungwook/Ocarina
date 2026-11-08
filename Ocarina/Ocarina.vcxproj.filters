@@ -30,9 +30,6 @@
     <ClCompile Include="lexer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="parser_array.cpp"><Filter>소스 파일</Filter></ClCompile>
-    <ClCompile Include="semantics_array.cpp"><Filter>소스 파일</Filter></ClCompile>
-    <ClCompile Include="ir_array.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="parser.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -54,6 +51,7 @@
     <ClCompile Include="vm_execute.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_instruction.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_memory.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_hierarchy.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_numeric.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_syscall.cpp">
       <Filter>소스 파일</Filter>

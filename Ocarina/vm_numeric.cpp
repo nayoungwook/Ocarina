@@ -62,7 +62,7 @@ VMOperand convert_argument(VMOperand operand, VMOPType target) {
 		return operand;
 
 	if (operand.op_type == VMOPType::OPRND_NULL &&
-		(target == VMOPType::OPRND_ADDRESS || target == VMOPType::OPRND_WINDOW)) {
+		(target == VMOPType::OPRND_ADDRESS)) {
 		operand.op_type = target;
 		return operand;
 	}
@@ -76,7 +76,9 @@ VMOperand convert_argument(VMOperand operand, VMOPType target) {
 	result.op_type = target;
 
 	if (target == VMOPType::OPRND_VEC) {
-		result.val.v.fill(static_cast<float>(unpack_numeric_operand(operand)));
+		result.val = VMNumericValue{};
+		std::fill(std::begin(result.val.v), std::end(result.val.v),
+			static_cast<float>(unpack_numeric_operand(operand)));
 		return result;
 	}
 
@@ -159,10 +161,8 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 				rhs.op_type != VMOPType::OPRND_NULL))
 			throw std::runtime_error("Unsupported operand types for numeric operator.");
 
-		const std::uint64_t lhs_value = lhs.op_type == VMOPType::OPRND_WINDOW ? lhs.val.u64 :
-			static_cast<std::uint32_t>(lhs.val.i32);
-		const std::uint64_t rhs_value = rhs.op_type == VMOPType::OPRND_WINDOW ? rhs.val.u64 :
-			static_cast<std::uint32_t>(rhs.val.i32);
+		const std::uint64_t lhs_value = static_cast<std::uint32_t>(lhs.val.i32);
+		const std::uint64_t rhs_value = static_cast<std::uint32_t>(rhs.val.i32);
 		const bool equal = lhs_value == rhs_value;
 		result.op_type = VMOPType::OPRND_BOOL;
 		result.val.i32 = opcode == OP_EQUAL ? equal : !equal;
@@ -177,7 +177,10 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 		const VMOperand a = convert_argument(lhs, VMOPType::OPRND_VEC);
 		const VMOperand b = convert_argument(rhs, VMOPType::OPRND_VEC);
 		result.op_type = boolean ? VMOPType::OPRND_BOOL : VMOPType::OPRND_VEC;
-		result.val.i32 = opcode == OP_NOTEQUAL ? false : true;
+		if (boolean)
+			result.val.i32 = opcode == OP_NOTEQUAL ? false : true;
+		else
+			result.val = VMNumericValue{};
 
 		for (unsigned i = 0; i < 3; ++i) {
 			const float value = numeric_operation(opcode, a.val.v[i], b.val.v[i]);
@@ -186,7 +189,8 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 					result.val.i32 |= value != 0;
 				else
 					result.val.i32 &= value != 0;
-			} else
+			}
+			else
 				result.val.v[i] = value;
 		}
 		return result;
@@ -208,11 +212,13 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 			if (b == 0)
 				throw std::runtime_error("Remainder by zero.");
 			value = a % b;
-		} else
+		}
+		else
 			value = numeric_operation(opcode, a, b);
 
 		result.val.i32 = std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(value));
-	} else if (level == 1) {
+	}
+	else if (level == 1) {
 		const float value = numeric_operation(opcode,
 			static_cast<float>(unpack_numeric_operand(lhs)),
 			static_cast<float>(unpack_numeric_operand(rhs)));
@@ -220,7 +226,8 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 			result.val.i32 = value != 0;
 		else
 			result.val.f32 = value;
-	} else {
+	}
+	else {
 		const double value =
 			numeric_operation(opcode, unpack_numeric_operand(lhs), unpack_numeric_operand(rhs));
 		if (boolean)

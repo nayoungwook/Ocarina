@@ -96,9 +96,6 @@
     <ClCompile Include="code_data.cpp" />
     <ClCompile Include="ir_load.cpp" />
     <ClCompile Include="lexer.cpp" />
-    <ClCompile Include="parser_array.cpp" />
-    <ClCompile Include="semantics_array.cpp" />
-    <ClCompile Include="ir_array.cpp" />
     <ClCompile Include="parser.cpp" />
     <ClCompile Include="source_files.cpp" />
     <ClCompile Include="type.cpp" />
@@ -109,6 +106,7 @@
     <ClCompile Include="vm_execute.cpp" />
     <ClCompile Include="vm_instruction.cpp" />
     <ClCompile Include="vm_memory.cpp" />
+    <ClCompile Include="vm_hierarchy.cpp" />
     <ClCompile Include="vm_numeric.cpp" />
     <ClCompile Include="ir.cpp" />
     <ClCompile Include="util.cpp" />
