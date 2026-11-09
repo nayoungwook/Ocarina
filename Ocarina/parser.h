@@ -57,6 +57,12 @@ struct Scope {
 	std::size_t prev_scope = NoNode;
 };
 
+struct SourceFile {
+	std::string path;
+	std::size_t first_node = 0, node_count = 0;
+	std::vector<std::string> imports;
+};
+
 class ParserContext {
 public:
 	ParserContext();
@@ -80,9 +86,10 @@ public:
 	std::vector<struct VarData> var_data;
 
 	std::vector<struct Node> nodes;
+	std::vector<SourceFile> source_files;
 
 	void compile_file(TokenizerContext input_tc);
-	void register_file(const std::string &path);
+	std::string register_file(const std::string &path);
 	void compile_files();
 	const struct Node &get_node(NodeId id) const;
 	struct Node &get_node(NodeId id);
@@ -98,7 +105,11 @@ private:
 	void resolve_first_pass_queue();
 	void resolve_second_pass_queue();
 	void register_import(const std::string &path);
-	std::unordered_set<std::string> registered_files;
+	std::unordered_map<std::string, std::string> registered_files;
+	std::unordered_map<std::string, std::vector<std::string>> imports;
+	void compile_source(const std::string &path,
+		std::unordered_map<std::string, TokenizerContext> &files,
+		std::unordered_set<std::string> &compiled);
 
 	std::vector<struct Node> node_pool;
 	struct ParamData parse_func_call_params();
@@ -108,6 +119,7 @@ private:
 		unsigned id, bool is_varargs);
 	void init_window_syscall();
 	void init_syscall();
+
 	template<class T>
 	static struct Node pack(enum ASTType type, T ast) {
 		struct Node result = {};
@@ -118,6 +130,7 @@ private:
 
 	NodeId store_node(struct Node node);
 	Token parse_type_token();
+	bool is_variable_target(const Node &node) const;
 	struct Node gen_func_call_node(const struct Token &first);
 	void parse_attribute(struct Node &ident_node);
 	struct Node gen_ident_node(const struct Token &first);

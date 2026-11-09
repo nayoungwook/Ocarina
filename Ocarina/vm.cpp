@@ -4,12 +4,12 @@
 
 #include <algorithm>
 #include <limits>
-#include <stdexcept>
+#include "ovm_panic.h"
 #include <utility>
 
-void CVM::clear() {
+void OVM::clear() {
 	if (syscalls)
-		throw std::runtime_error("Cannot clear a running CVM.");
+		throw OVMPanic("Cannot clear a running OVM.");
 
 	engine.shutdown();
 	clear_execution();
@@ -22,31 +22,21 @@ void CVM::clear() {
 	main_func_id = std::numeric_limits<unsigned>::max();
 }
 
-void CVM::register_bytes(std::string fname, std::vector<byte> bytes) {
+void OVM::register_bytes(std::string fname, std::vector<byte> bytes) {
 	byte_files[std::move(fname)] = std::move(bytes);
 }
 
-void CVM::register_ir(std::string fname, const IRContext &irc) {
+void OVM::register_ir(std::string fname, const IRContext &irc) {
 	register_bytes(std::move(fname), irc.get_bytes());
 }
 
-void CVM::register_bytecode(const std::string &path) {
+void OVM::register_bytecode(const std::string &path) {
 	std::string bytes = read_file(path);
 	register_bytes(path, std::vector<byte>(bytes.begin(), bytes.end()));
 }
 
-void CVM::load_files() {
-	std::vector<std::string> ordered;
-
-	for (const auto &entry : byte_files)
-		ordered.push_back(entry.first);
-
-	std::sort(ordered.begin(), ordered.end());
-	std::vector<IRLoader> readers;
-	readers.reserve(ordered.size());
-
-	for (const std::string &name : ordered)
-		readers.emplace_back(byte_files.at(name), name);
-
+void OVM::load_files() {
+	if (syscalls) throw OVMPanic("Cannot load bytecode in a running OVM.");
+	auto readers = IRLoader::read_files(byte_files);
 	IRLoader::read_ir_files(*this, readers);
 }

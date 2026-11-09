@@ -18,6 +18,7 @@
     <ClCompile Include="main.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="shell_commands.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -67,9 +68,11 @@
     <ClInclude Include="parser.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="shell_commands.h"><Filter>헤더 파일</Filter></ClInclude>
     <ClInclude Include="vm.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="ovm_panic.h"><Filter>헤더 파일</Filter></ClInclude>
     <ClInclude Include="code_data.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>

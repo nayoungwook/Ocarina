@@ -1,19 +1,99 @@
 #include "ir_load.h"
 #include "vm.h"
 #include "vm_numeric.h"
+#include "util.h"
 
 #include <algorithm>
 #include <bit>
+#include <cctype>
+#include <filesystem>
 #include <limits>
-#include <stdexcept>
+#include "ovm_panic.h"
 #include <utility>
 
 IRLoader::IRLoader(std::vector<byte> input_bytes, std::string source_name)
 	: bytes(std::move(input_bytes)), source(std::move(source_name)) {
 }
 
+static std::string utf8_path(const std::filesystem::path &path) {
+	const auto value = path.u8string();
+	return std::string(value.begin(), value.end());
+}
+
+static std::string bytecode_key(const std::filesystem::path &path) {
+	std::string key = utf8_path(path);
+#ifdef _WIN32
+	for (char &ch : key) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+#endif
+	return key;
+}
+
+std::vector<std::string> IRLoader::read_imports() {
+	reader_cnt = 0;
+	expect_byte(META_BEGIN);
+	std::vector<std::string> imports;
+	
+	while (peek_byte() == META_IMPORT) {
+		read_byte();
+		const std::string path = read_string();
+		if (path.empty()) reader_error("empty bytecode import");
+		imports.push_back(path);
+	}
+	
+	reader_cnt = 0;
+
+	return imports;
+}
+
+void IRLoader::read_file_tree(const std::string &path,
+	const std::map<std::string, const std::vector<byte> *> &files,
+	std::set<std::string> &seen, std::vector<IRLoader> &readers) {
+	
+	if (!seen.insert(path).second) return;
+	
+	std::vector<byte> bytes;
+	const auto registered = files.find(path);
+	
+	if (registered != files.end()) bytes = *registered->second;
+	else {
+		const std::string contents = read_file(path);
+		bytes.assign(contents.begin(), contents.end());
+	}
+
+	IRLoader reader(std::move(bytes), path);
+	const std::filesystem::path source(std::u8string(path.begin(), path.end()));
+	
+	for (const std::string &dependency : reader.read_imports()) {
+		std::filesystem::path file(std::u8string(dependency.begin(), dependency.end()));
+		if (file.is_relative()) file = source.parent_path() / file;
+		if (!std::filesystem::is_regular_file(file))
+			reader.reader_error("missing bytecode dependency: " + utf8_path(file));
+		read_file_tree(bytecode_key(std::filesystem::canonical(file)), files, seen, readers);
+	}
+	
+	readers.push_back(std::move(reader));
+}
+
+std::vector<IRLoader> IRLoader::read_files(const std::unordered_map<std::string, std::vector<byte>> &files) {
+	std::map<std::string, const std::vector<byte> *> registered;
+	
+	for (const auto &[name, bytes] : files) {
+		std::filesystem::path path(std::u8string(name.begin(), name.end()));
+		path = std::filesystem::is_regular_file(path) ? std::filesystem::canonical(path)
+			: std::filesystem::absolute(path).lexically_normal();
+		registered.emplace(bytecode_key(path), &bytes);
+	}
+	
+	std::set<std::string> seen;
+	std::vector<IRLoader> readers;
+	
+	for (const auto &[path, bytes] : registered) read_file_tree(path, registered, seen, readers);
+	
+	return readers;
+}
+
 void IRLoader::reader_error(const std::string &message) const {
-	throw std::runtime_error(source + ": IR load error at byte " + std::to_string(reader_cnt) +
+	throw OVMPanic(source + ": IR load error at byte " + std::to_string(reader_cnt) +
 							 ": " + message);
 }
 
@@ -92,49 +172,7 @@ std::string IRLoader::read_string() {
 	return value;
 }
 
-unsigned IRLoader::relocated_object_id(unsigned local_id) const {
-	for (const ObjectRelocation &entry : objects)
-		if (entry.local_id == local_id)
-			return entry.runtime_id;
-
-	return 0;
-}
-
-unsigned
-IRLoader::object_runtime_id(const CVM &vm, unsigned local_id, const std::string &name) const {
-	for (const auto &[id, data] : vm.object_data)
-		if (data.name == name)
-			return id;
-
-	if (!vm.object_data.contains(local_id))
-		return local_id;
-
-	unsigned next_id = vm.object_data.rbegin()->first;
-
-	if (next_id >= static_cast<unsigned>(INT32_MAX))
-		reader_error("object id overflow");
-
-	return next_id + 1;
-}
-
-void IRLoader::relocate_parent_objects(CVM &vm) {
-	for (const ObjectRelocation &entry : objects) {
-		unsigned parent_id = relocated_object_id(entry.parent_local_id);
-
-		if (entry.parent_local_id != 0 && parent_id == 0)
-			reader_error("unresolved parent object id");
-
-		VMObjectData &data = vm.object_data.at(entry.runtime_id);
-
-		if (data.parent_resolved && data.parent_id != parent_id)
-			reader_error("conflicting object parent");
-
-		data.parent_id = parent_id;
-		data.parent_resolved = true;
-	}
-}
-
-void IRLoader::read_function_metadata(CVM &vm, unsigned owner, bool is_constructor) {
+void IRLoader::read_function_metadata(OVM &vm, unsigned owner, bool is_constructor) {
 	VMFunctionData data;
 	data.id = read_id();
 	data.name = read_string();
@@ -161,18 +199,22 @@ void IRLoader::read_function_metadata(CVM &vm, unsigned owner, bool is_construct
 		const std::string type_name = read_string();
 		const VMOPType type = vm_operand_type(type_name);
 		const unsigned size = get_operand_size(type);
+		
 		if (type_name.empty() || size == 0 || offset < end || offset > data.stack_size ||
 			size > data.stack_size - offset || !data.local_types.emplace(offset, type).second)
 			reader_error("invalid local variable layout");
+
 		end = offset + size;
 	}
 
 	unsigned offset = 0;
 	for (const std::string &type_name : data.argument_types) {
 		const VMOPType type = vm_operand_type(type_name);
+		
 		if (type_name.empty() || !data.local_types.contains(offset) ||
 			data.local_types.at(offset) != type)
 			reader_error("argument layout does not match local variables");
+		
 		const unsigned size = get_operand_size(type);
 		data.argument_sizes.push_back(size);
 		offset += size;
@@ -184,15 +226,8 @@ void IRLoader::read_function_metadata(CVM &vm, unsigned owner, bool is_construct
 	auto &table = owner == 0 ? vm.function_data : vm.object_data.at(owner).function_data;
 	auto found = table.find(data.id);
 
-	if (found != table.end()) {
-		const VMFunctionData &old = found->second;
-
-		if (owner == 0 || old.name != data.name || old.return_type != data.return_type ||
-			old.argument_types != data.argument_types || old.local_types != data.local_types ||
-			old.stack_size != data.stack_size || old.is_constructor != is_constructor)
-			reader_error("conflicting function metadata");
-	} else
-		table.emplace(data.id, data);
+	if (found != table.end()) reader_error("conflicting function metadata");
+	table.emplace(data.id, data);
 
 	if (owner == 0 && data.name == "main") {
 		if (vm.main_func_id != std::numeric_limits<unsigned>::max())
@@ -202,8 +237,12 @@ void IRLoader::read_function_metadata(CVM &vm, unsigned owner, bool is_construct
 	}
 }
 
-void IRLoader::read_meta_block(CVM &vm, unsigned owner) {
+void IRLoader::read_meta_block(OVM &vm, unsigned owner) {
 	byte kind = read_byte();
+	if (kind == META_IMPORT) {
+		if (read_string().empty()) reader_error("empty bytecode import");
+		return;
+	}
 
 	if (kind == META_FUNC || kind == META_CONSTRUCTOR) {
 		read_function_metadata(vm, owner, kind == META_CONSTRUCTOR);
@@ -220,31 +259,16 @@ void IRLoader::read_meta_block(CVM &vm, unsigned owner) {
 		const unsigned parent_id = read_id();
 		const unsigned size = read_id();
 
-		if (id == 0 || relocated_object_id(id) != 0)
+		if (id == 0 || !objects.insert(id).second || vm.object_data.contains(id))
 			reader_error("invalid or duplicate object id");
-
-		unsigned runtime_id = object_runtime_id(vm, id, name);
-
-		for (const auto &entry : objects)
-			if (entry.runtime_id == runtime_id)
-				reader_error("duplicate object name");
-
-		objects.push_back({id, runtime_id, parent_id});
-
-		if (vm.object_data.contains(runtime_id)) {
-			if (vm.object_data.at(runtime_id).size != size)
-				reader_error("conflicting object size");
-		} else {
-			VMObjectData data;
-			data.id = runtime_id;
-			data.name = name;
-			data.size = size;
-			data.initializer.name = "<initializer>";
-			vm.object_data.emplace(runtime_id, std::move(data));
-		}
-
-		while (peek_byte() != META_TERM)
-			read_meta_block(vm, runtime_id);
+		VMObjectData data;
+		data.id = id;
+		data.name = name;
+		data.parent_id = parent_id;
+		data.size = size;
+		data.initializer.name = "<initializer>";
+		vm.object_data.emplace(id, std::move(data));
+		while (peek_byte() != META_TERM) read_meta_block(vm, id);
 
 		expect_byte(META_TERM);
 
@@ -275,14 +299,8 @@ void IRLoader::read_meta_block(CVM &vm, unsigned owner) {
 		auto &table = owner == 0 ? vm.variable_data : vm.object_data.at(owner).variable_data;
 		auto found = table.find(data.id);
 
-		if (found != table.end()) {
-			const VMVariableData &old = found->second;
-
-			if (owner == 0 || old.name != data.name || old.type != data.type ||
-				old.offset != data.offset || old.size != data.size)
-				reader_error("conflicting variable metadata");
-		} else
-			table.emplace(data.id, std::move(data));
+		if (found != table.end()) reader_error("conflicting variable metadata");
+		table.emplace(data.id, std::move(data));
 
 		return;
 	}
@@ -290,7 +308,7 @@ void IRLoader::read_meta_block(CVM &vm, unsigned owner) {
 	reader_error("unknown metadata block");
 }
 
-void IRLoader::read_meta(CVM &vm) {
+void IRLoader::read_meta(OVM &vm) {
 	expect_byte(META_BEGIN);
 
 	while (peek_byte() != META_END)
@@ -299,7 +317,7 @@ void IRLoader::read_meta(CVM &vm) {
 	expect_byte(META_END);
 }
 
-std::vector<VMInstruction> IRLoader::decode_function_instructions(bool terminated,
+std::vector<VMInstruction> IRLoader::decode_function_instructions(const OVM &vm, bool terminated,
 																  bool block_boundary) {
 	std::map<unsigned, unsigned> label_targets;
 	std::vector<VMInstruction> instructions;
@@ -354,31 +372,21 @@ std::vector<VMInstruction> IRLoader::decode_function_instructions(bool terminate
 
 		if (opcode == OP_ADD_CHILD && instruction.operands.u32[0] > 1)
 			reader_error("invalid add_child receiver");
+		if (opcode == OP_VECTOR_COMPONENT && instruction.operands.u32[0] > 2)
+			reader_error("invalid vector component");
+		if (opcode == OP_SAVE_VECTOR_COMPONENT &&
+			(instruction.operands.u32[0] > static_cast<unsigned>(VectorStorage::Attribute) ||
+			 instruction.operands.u32[2] > 2))
+			reader_error("invalid vector component store");
 
 		if (opcode == OP_CONVERT &&
 			(instruction.operands.u32[0] < static_cast<unsigned>(VMOPType::OPRND_INT32) ||
 			 instruction.operands.u32[0] > static_cast<unsigned>(VMOPType::OPRND_VEC)))
 			reader_error("invalid conversion type");
 
-		if (opcode == OP_NEW_OBJECT || opcode == OP_CALL_SUPER) {
-			unsigned id = instruction.operands.u32[0];
-			unsigned relocated = relocated_object_id(id);
-
-			if (instruction.operands.i32[0] <= 0 || relocated == 0)
-				reader_error("unresolved instruction object id");
-
-			instruction.operands.i32[0] = static_cast<std::int32_t>(relocated);
-			instruction.operands.u32[0] = relocated;
-		}
-
-		if (opcode == OP_LOAD_STR) {
-			if (instruction.operands.i32[0] < 0 || string_base > static_cast<unsigned>(INT32_MAX) ||
-				instruction.operands.u32[0] > static_cast<unsigned>(INT32_MAX) - string_base)
-				reader_error("invalid string reference");
-
-			instruction.operands.u32[0] += string_base;
-			instruction.operands.i32[0] = static_cast<std::int32_t>(instruction.operands.u32[0]);
-		}
+		if ((opcode == OP_NEW_OBJECT || opcode == OP_CALL_SUPER) &&
+			!vm.object_data.contains(instruction.operands.u32[0]))
+			reader_error("undefined instruction object id");
 
 		instructions.push_back(instruction);
 	}
@@ -400,13 +408,13 @@ std::vector<VMInstruction> IRLoader::decode_function_instructions(bool terminate
 	return instructions;
 }
 
-std::vector<VMInstruction> IRLoader::read_function_code() {
-	auto instructions = decode_function_instructions(true);
+std::vector<VMInstruction> IRLoader::read_function_code(const OVM &vm) {
+	auto instructions = decode_function_instructions(vm, true);
 	expect_byte(CODE_TERM);
 	return instructions;
 }
 
-void IRLoader::read_function(CVM &vm, unsigned owner) {
+void IRLoader::read_function(OVM &vm, unsigned owner) {
 	unsigned id = read_id();
 	auto &table = owner == 0 ? vm.function_data : vm.object_data.at(owner).function_data;
 
@@ -417,15 +425,16 @@ void IRLoader::read_function(CVM &vm, unsigned owner) {
 		reader_error("duplicate function code");
 
 	VMFunctionData &data = table.at(id);
-	data.instructions = read_function_code();
+	data.instructions = read_function_code(vm);
 	data.code_loaded = true;
 }
+
 
 static void append_instructions(VMFunctionData &data, std::vector<VMInstruction> instructions) {
 	const std::size_t base = data.instructions.size();
 
 	if (instructions.size() > static_cast<std::size_t>(INT32_MAX) - base)
-		throw std::runtime_error("Initializer is too large.");
+		throw OVMPanic("Initializer is too large.");
 
 	for (VMInstruction &instruction : instructions) {
 		if (instruction.opcode == OP_GOTO || instruction.opcode == OP_JE ||
@@ -439,10 +448,10 @@ static void append_instructions(VMFunctionData &data, std::vector<VMInstruction>
 	data.code_loaded = true;
 }
 
-void IRLoader::read_object(CVM &vm) {
-	unsigned owner = relocated_object_id(read_id());
+void IRLoader::read_object(OVM &vm) {
+	unsigned owner = read_id();
 
-	if (owner == 0)
+	if (!objects.contains(owner))
 		reader_error("object code has no matching metadata");
 
 	while (peek_byte() != CODE_TERM) {
@@ -453,7 +462,7 @@ void IRLoader::read_object(CVM &vm) {
 			read_function(vm, owner);
 		} else if (kind != CODE_OBJECT && kind != CODE_END)
 			append_instructions(vm.object_data.at(owner).initializer,
-								decode_function_instructions(true, true));
+								decode_function_instructions(vm, true, true));
 		else
 			reader_error("unknown object code block");
 	}
@@ -461,7 +470,7 @@ void IRLoader::read_object(CVM &vm) {
 	expect_byte(CODE_TERM);
 }
 
-void IRLoader::read_code(CVM &vm) {
+void IRLoader::read_code(OVM &vm) {
 	expect_byte(CODE_BEGIN);
 
 	while (peek_byte() != CODE_END) {
@@ -474,7 +483,7 @@ void IRLoader::read_code(CVM &vm) {
 			read_byte();
 			read_function(vm, 0);
 		} else
-			append_instructions(vm.initializer, decode_function_instructions(false, true));
+			append_instructions(vm.initializer, decode_function_instructions(vm, false, true));
 	}
 
 	expect_byte(CODE_END);
@@ -482,14 +491,14 @@ void IRLoader::read_code(CVM &vm) {
 
 static std::string decode_string_literal(const std::string &literal) {
 	if (literal.size() < 2 || literal.front() != '"' || literal.back() != '"')
-		throw std::runtime_error("Invalid string literal in rodata.");
+		throw OVMPanic("Invalid string literal in rodata.");
 
 	std::string value;
 	for (std::size_t i = 1; i + 1 < literal.size(); ++i) {
 		char ch = literal[i];
 		if (ch == '\\') {
 			if (++i + 1 >= literal.size())
-				throw std::runtime_error("Invalid string literal in rodata.");
+				throw OVMPanic("Invalid string literal in rodata.");
 			switch (literal[i]) {
 			case 'n':
 				ch = '\n';
@@ -513,7 +522,7 @@ static std::string decode_string_literal(const std::string &literal) {
 				ch = '"';
 				break;
 			default:
-				throw std::runtime_error("Invalid string escape in rodata.");
+				throw OVMPanic("Invalid string escape in rodata.");
 			}
 		}
 		value += ch;
@@ -521,7 +530,7 @@ static std::string decode_string_literal(const std::string &literal) {
 	return value;
 }
 
-void IRLoader::read_rodata(CVM &vm) {
+void IRLoader::read_rodata(OVM &vm) {
 	expect_byte(RODATA_BEGIN);
 	std::set<unsigned> ids;
 
@@ -529,13 +538,11 @@ void IRLoader::read_rodata(CVM &vm) {
 		expect_byte(RODATA_STR);
 		unsigned id = read_id();
 
-		if (!ids.insert(id).second || string_base > static_cast<unsigned>(INT32_MAX) ||
-			id > static_cast<unsigned>(INT32_MAX) - string_base)
+		if (!ids.insert(id).second)
 			reader_error("invalid string id");
 
 		std::string value = read_string();
 		value = decode_string_literal(value);
-		id += string_base;
 
 		if (!vm.vm_string_pool.str_pool.emplace(id, std::move(value)).second)
 			reader_error("duplicate string id");
@@ -558,7 +565,7 @@ static bool valid_strings(const VMFunctionData &data, const VMStringPool &pool) 
 	return true;
 }
 
-void IRLoader::validate_strings(const CVM &vm) const {
+void IRLoader::validate_strings(const OVM &vm) const {
 	if (!valid_strings(vm.initializer, vm.vm_string_pool))
 		reader_error("undefined string id");
 
@@ -576,12 +583,10 @@ void IRLoader::validate_strings(const CVM &vm) const {
 	}
 }
 
-void IRLoader::read_ir_files(CVM &vm, std::vector<IRLoader> &readers) {
-	CVM loaded;
+void IRLoader::read_ir_files(OVM &vm, std::vector<IRLoader> &readers) {
+	OVM loaded;
 	loaded.initializer.name = "<global initializer>";
-
 	for (IRLoader &reader : readers) {
-
 		reader.reader_cnt = 0;
 		reader.objects.clear();
 		reader.functions.clear();
@@ -589,17 +594,14 @@ void IRLoader::read_ir_files(CVM &vm, std::vector<IRLoader> &readers) {
 		reader.function_code.clear();
 		reader.read_meta(loaded);
 	}
-
-	for (IRLoader &reader : readers)
-		reader.relocate_parent_objects(loaded);
-
+	for (const auto &[id, object] : loaded.object_data)
+		if (object.parent_id != 0 && !loaded.object_data.contains(object.parent_id))
+			throw OVMPanic("IR load error: undefined parent object id.");
 	for (IRLoader &reader : readers) {
-		reader.string_base = loaded.vm_string_pool.size;
 		reader.read_code(loaded);
 		reader.read_rodata(loaded);
-		reader.validate_strings(loaded);
 	}
-
+	for (const IRLoader &reader : readers) reader.validate_strings(loaded);
 	vm.object_data = std::move(loaded.object_data);
 	vm.function_data = std::move(loaded.function_data);
 	vm.variable_data = std::move(loaded.variable_data);

@@ -5,24 +5,26 @@
 
 #include <set>
 
-class CVM;
-
-struct ObjectRelocation {
-	unsigned local_id = 0, runtime_id = 0, parent_local_id = 0;
-};
+class OVM;
 
 class IRLoader {
 public:
 	IRLoader(std::vector<byte> input_bytes, std::string source_name = {});
-	static void read_ir_files(CVM &vm, std::vector<IRLoader> &readers);
+	static std::vector<IRLoader> read_files(const std::unordered_map<std::string, std::vector<byte>> &files);
+	static void read_ir_files(OVM &vm, std::vector<IRLoader> &readers);
+	const std::string &get_source() const { return source; }
+	const std::vector<byte> &get_bytes() const { return bytes; }
 	std::size_t reader_cnt = 0;
 
 private:
 	std::vector<byte> bytes;
 	std::string source;
-	std::vector<ObjectRelocation> objects;
-	unsigned string_base = 0;
+	std::set<unsigned> objects;
 	std::set<std::pair<unsigned, unsigned>> functions, variables, function_code;
+	std::vector<std::string> read_imports();
+	static void read_file_tree(const std::string &path,
+		const std::map<std::string, const std::vector<byte> *> &files,
+		std::set<std::string> &seen, std::vector<IRLoader> &readers);
 
 	[[noreturn]] void reader_error(const std::string &message) const;
 	bool has_bytes(std::size_t count) const;
@@ -34,18 +36,15 @@ private:
 	std::int32_t read_i32();
 	unsigned read_id();
 	std::string read_string();
-	unsigned relocated_object_id(unsigned local_id) const;
-	unsigned object_runtime_id(const CVM &vm, unsigned local_id, const std::string &name) const;
-	void relocate_parent_objects(CVM &vm);
-	void read_function_metadata(CVM &vm, unsigned owner, bool is_constructor);
-	void read_meta_block(CVM &vm, unsigned owner);
-	void read_meta(CVM &vm);
-	std::vector<VMInstruction> decode_function_instructions(bool terminated,
+	void read_function_metadata(OVM &vm, unsigned owner, bool is_constructor);
+	void read_meta_block(OVM &vm, unsigned owner);
+	void read_meta(OVM &vm);
+	std::vector<VMInstruction> decode_function_instructions(const OVM &vm, bool terminated,
 		bool block_boundary = false);
-	std::vector<VMInstruction> read_function_code();
-	void read_function(CVM &vm, unsigned owner);
-	void read_object(CVM &vm);
-	void read_code(CVM &vm);
-	void read_rodata(CVM &vm);
-	void validate_strings(const CVM &vm) const;
+	std::vector<VMInstruction> read_function_code(const OVM &vm);
+	void read_function(OVM &vm, unsigned owner);
+	void read_object(OVM &vm);
+	void read_code(OVM &vm);
+	void read_rodata(OVM &vm);
+	void validate_strings(const OVM &vm) const;
 };

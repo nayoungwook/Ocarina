@@ -1,7 +1,7 @@
 #include "context.h"
 
 #include <cmath>
-#include <stdexcept>
+#include "../../ovm_panic.h"
 
 void TonicContext::clear(float r, float g, float b, float a) {
 	require_frame(); engine.get_renderer()->clear(r, g, b, a);
@@ -21,7 +21,7 @@ void TonicContext::draw_oval(float x, float y, float width, float height, float 
 
 void TonicContext::set_camera(float x, float y, float zoom, float rotation) {
 	require_engine();
-	if (!std::isfinite(zoom) || zoom <= 0) throw std::runtime_error("Camera zoom must be positive.");
+	if (!std::isfinite(zoom) || zoom <= 0) throw OVMPanic("Camera zoom must be positive.");
 	engine.get_camera()->position = Vector(x, y);
 	engine.get_camera()->zoom = zoom;
 	engine.get_camera()->rotation = rotation;

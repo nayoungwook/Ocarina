@@ -1,6 +1,6 @@
 #include "error.h"
-#include <stdexcept>
+#include "../../ovm_panic.h"
 
 void error(const std::string &msg) {
-	throw std::runtime_error("Tonic: " + msg);
+	throw OVMPanic("Tonic: " + msg);
 }

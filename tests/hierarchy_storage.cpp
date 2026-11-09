@@ -1,17 +1,18 @@
 #include "vm_memory.h"
+#include "ovm_panic.h"
 
 #include <iostream>
 #include <stdexcept>
 
 static void require(bool condition, const char *message) {
 	if (!condition)
-		throw std::runtime_error(message);
+		throw std::logic_error(message);
 }
 
 template<class F> static void rejects(F operation) {
 	try { operation(); }
-	catch (const std::runtime_error &) { return; }
-	throw std::runtime_error("Invalid hierarchy operation was accepted.");
+	catch (const OVMPanic &) { return; }
+	throw std::logic_error("Invalid hierarchy operation was accepted.");
 }
 
 int main() {

@@ -1,0 +1,68 @@
+var value:int = 900;
+
+object Base {
+    var value:int = 1;
+    var self:Base = this;
+
+    constructor Base(value:int) {
+        this.value = value;
+    }
+
+    func base_self():Base { return this; }
+    func get():int { return this.value; }
+    func add(amount:int):void { this.value += amount; }
+
+    func via_other(other:Base):int {
+        this.add(other.get());
+        return this.get();
+    }
+
+    func attach(parent:Group):void { parent.add_child(this); }
+}
+
+object Child extends Base {
+    var child_self:Child = this;
+
+    constructor Child(value:int) {
+        super(value);
+        this.value += 2;
+    }
+
+    func get_self():Child { return this; }
+
+    func bump(value:int):void {
+        this.value = value;
+        this.value += 2;
+        this.value++;
+        ++this.value;
+        this.value--;
+        --this.value;
+        this.self.value += 3;
+    }
+
+    func adopt(other:Base):void { this.add_child(other); }
+}
+
+object Group {
+    func adopt(child:Base):void { this.add_child(child); }
+}
+
+func same(a:Base, b:Base):bool { return a == b; }
+
+func main():void {
+    var a:Child = new Child(5);
+    var b:Child = new Child(10);
+    print("init:", a.value, ",", a.self == a, ",", a.child_self == a, "\n");
+    print("identity:", a.base_self() == a, ",", a.get_self() == a, ",", same(a.get_self(), a), "\n");
+    a.bump(10);
+    print("members:", a.value, ",", a.get_self().self.value, ",", value, "\n");
+    print("calls:", a.via_other(b), ",", b.value, ",", a.base_self() == a, "\n");
+    var alias:Base = a.get_self();
+    alias.value += 1;
+    print("alias:", a.value, ",", same(a.base_self(), alias), "\n");
+    var group:Group = new Group();
+    group.adopt(a);
+    a.adopt(b);
+    b.attach(group);
+    print("hierarchy:", a.self == a, ",", b.child_self == b, "\n");
+}

@@ -6,7 +6,9 @@
 #include <bit>
 #include <charconv>
 #include <cmath>
+#include <filesystem>
 #include <limits>
+#include <map>
 
 void IRContext::init_irc() {
 	bytes.clear();
@@ -16,6 +18,7 @@ void IRContext::init_irc() {
 	current_object = NoNode;
 	current_func = NoNode;
 	return_label = NoNode;
+	next_string_id = 0;
 }
 
 void IRContext::emit_byte(byte _b) {
@@ -52,10 +55,11 @@ void IRContext::emit_double(double f) {
 }
 
 void IRContext::gen_func_metadata(const FuncData &fd,
-								  const std::vector<std::size_t> &declared_vars) {
+	const std::vector<std::size_t> &declared_vars) {
 	emit_byte(fd.is_constructor ? META_CONSTRUCTOR : META_FUNC);
 	emit_int(fd.id);
 	emit_str(fd.func_name);
+
 	if (!fd.is_constructor)
 		emit_str(fd.return_type.type_str);
 
@@ -74,6 +78,7 @@ void IRContext::gen_func_metadata(const FuncData &fd,
 
 void IRContext::gen_var_metadata(const VarData &vd) {
 	emit_byte(META_VAR);
+
 	emit_int(vd.id);
 	emit_str(vd.var_name);
 	emit_str(vd.type.type_str);
@@ -87,15 +92,16 @@ void IRContext::gen_object_metadata(const ObjectAST &object_ast) {
 	emit_int(cd.id);
 	emit_str(cd.object_type.type_str);
 	emit_int(cd.parent_type.type_str.empty()
-				 ? 0
-				 : pc.object_data.at(cd.parent_type.data.object_data).id);
+		? 0
+		: pc.object_data.at(cd.parent_type.data.object_data).id);
 	emit_int(cd.instance_size);
 
 	for (const Node &node : object_ast.body) {
 		if (node.type == AST_FunctionDeclaration) {
 			const FuncDeclAST &func = std::get<FuncDeclAST>(node.ast);
 			gen_func_metadata(pc.func_data.at(func.func_data), func.declared_vars);
-		} else if (node.type == AST_Constructor) {
+		}
+		else if (node.type == AST_Constructor) {
 			const ConstructorAST &constructor = std::get<ConstructorAST>(node.ast);
 			gen_func_metadata(pc.func_data.at(constructor.func_data), constructor.declared_vars);
 		}
@@ -108,22 +114,34 @@ void IRContext::gen_object_metadata(const ObjectAST &object_ast) {
 	emit_byte(META_TERM);
 }
 
-void IRContext::gen_metadata() {
+void IRContext::gen_global_metadata(const Node &node) {
+	if (node.type == AST_VariableDeclarationBundle) {
+		for (const Node &declaration : std::get<VarDeclBundleAST>(node.ast).var_decls)
+			gen_global_metadata(declaration);
+	} else if (node.type == AST_VariableDeclaration) {
+		gen_var_metadata(pc.var_data.at(std::get<VarDeclAST>(node.ast).var_data));
+	}
+}
+
+void IRContext::gen_metadata(std::span<const Node> nodes, const std::vector<std::string> &imports) {
 	emit_byte(META_BEGIN);
-	for (const Node &node : pc.nodes) {
+
+	for (const std::string &path : imports) {
+		emit_byte(META_IMPORT);
+		emit_str(path);
+	}
+
+	for (const Node &node : nodes) {
 		if (node.type == AST_Object)
 			gen_object_metadata(std::get<ObjectAST>(node.ast));
 	}
-	for (const Node &node : pc.nodes) {
+	for (const Node &node : nodes) {
 		if (node.type == AST_FunctionDeclaration) {
 			const FuncDeclAST &func = std::get<FuncDeclAST>(node.ast);
 			gen_func_metadata(pc.func_data.at(func.func_data), func.declared_vars);
 		}
 	}
-	for (const VarData &vd : pc.var_data) {
-		if (vd.scope_data == ScopeGlobal)
-			gen_var_metadata(vd);
-	}
+	for (const Node &node : nodes) gen_global_metadata(node);
 	emit_byte(META_END);
 }
 
@@ -149,7 +167,7 @@ RODATA_Str IRContext::add_str_rodata(const std::string &str) {
 	auto rodata_str = str_rodata.find(str);
 	if (rodata_str != str_rodata.end())
 		return rodata_str->second;
-	RODATA_Str result = {str, static_cast<unsigned>(str_rodata.size())};
+	RODATA_Str result = { str, next_string_id++ };
 	str_rodata[str] = result;
 	return result;
 }
@@ -272,21 +290,61 @@ void IRContext::gen_ident_update_ir(const VarData &var_data, bool is_attr, bool 
 
 void IRContext::gen_ident_ir(const Node &node, bool value_required) {
 	const IdentifierAST &ident_ast = std::get<IdentifierAST>(node.ast);
-	gen_ident_load_ir(pc.var_data.at(ident_ast.var_data), ident_ast.is_attr);
+	if (ident_ast.vector_component >= 0) {
+		emit_byte(OP_VECTOR_COMPONENT);
+		emit_int(static_cast<unsigned>(ident_ast.vector_component));
+	} else
+		gen_ident_load_ir(pc.var_data.at(ident_ast.var_data), ident_ast.is_attr);
 	if (node.attr != NoNode)
 		gen_child_ir(node.attr, value_required);
 }
 
-const Node &IRContext::gen_assignment_target(const Node &node) {
-	if (node.attr == NoNode) {
+IdentifierAST IRContext::gen_assignment_target(const Node &node) {
+	const IdentifierAST *component = nullptr;
+	if (node.attr != NoNode && pc.get_node(node.attr).type == AST_Identifier) {
+		const auto &ident = std::get<IdentifierAST>(pc.get_node(node.attr).ast);
+		if (ident.vector_component >= 0) component = &ident;
+	}
+	if (node.attr == NoNode || component) {
 		if (node.type != AST_Identifier)
-			panic("Assignment requires a variable or member.", pc.tc);
-		return node;
+			panic("Assignment requires a variable or member; temporary vectors are read-only.", pc.tc);
+		IdentifierAST target = std::get<IdentifierAST>(node.ast);
+		if (component) target.vector_component = component->vector_component;
+		return target;
 	}
 	Node receiver = node;
 	receiver.attr = NoNode;
 	gen_node_ir(receiver, true);
 	return gen_assignment_target(pc.get_node(node.attr));
+}
+
+void IRContext::gen_target_load_ir(const IdentifierAST &target) {
+	gen_ident_load_ir(pc.var_data.at(target.var_data), target.is_attr);
+	if (target.vector_component >= 0) {
+		emit_byte(OP_VECTOR_COMPONENT);
+		emit_int(static_cast<unsigned>(target.vector_component));
+	}
+}
+
+void IRContext::gen_target_save_ir(const IdentifierAST &target) {
+	const VarData &data = pc.var_data.at(target.var_data);
+	if (target.vector_component < 0) {
+		gen_ident_save_ir(data, target.is_attr);
+		return;
+	}
+	VectorStorage storage = VectorStorage::Attribute;
+	if (!target.is_attr) {
+		switch (data.scope_data) {
+		case ScopeLocal: storage = VectorStorage::Local; break;
+		case ScopeGlobal: storage = VectorStorage::Global; break;
+		case ScopeObject: storage = VectorStorage::Object; break;
+		default: panic("Invalid vector variable scope.", pc.tc);
+		}
+	}
+	emit_byte(OP_SAVE_VECTOR_COMPONENT);
+	emit_int(static_cast<unsigned>(storage));
+	emit_int(data.offset);
+	emit_int(static_cast<unsigned>(target.vector_component));
 }
 
 void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative) {
@@ -302,7 +360,8 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 			panic("Integer literal exceeds int32 range.", pc.tc);
 		emit_byte(OP_LDC_I4);
 		emit_int(static_cast<std::uint32_t>(value));
-	} else if (num_lit_ast.type.nbyte == 4) {
+	}
+	else if (num_lit_ast.type.nbyte == 4) {
 		float value = 0;
 		auto result = std::from_chars(str.data(), str.data() + str.size(), value);
 		if (result.ec != std::errc{} || result.ptr != str.data() + str.size() ||
@@ -310,7 +369,8 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 			panic("Invalid float literal.", pc.tc);
 		emit_byte(OP_LDC_F4);
 		emit_float(value);
-	} else {
+	}
+	else {
 		double value = 0;
 		auto result = std::from_chars(str.data(), str.data() + str.size(), value);
 		if (result.ec != std::errc{} || result.ptr != str.data() + str.size() ||
@@ -328,10 +388,12 @@ void IRContext::gen_zero(const Type &type) {
 	else if (type.type_str == "float") {
 		emit_byte(OP_LDC_F4);
 		emit_float(0);
-	} else if (type.type_str == "double") {
+	}
+	else if (type.type_str == "double") {
 		emit_byte(OP_LDC_F8);
 		emit_double(0);
-	} else {
+	}
+	else {
 		emit_byte(OP_LDC_I4);
 		emit_int(0);
 	}
@@ -369,8 +431,8 @@ void IRContext::gen_value_ir(const Node &node, const Type &target) {
 }
 
 void IRContext::gen_function_ir(const FuncData &func_data,
-								const std::vector<std::size_t> &declared_vars,
-								const std::vector<Node> &body) {
+	const std::vector<std::size_t> &declared_vars,
+	const std::vector<Node> &body) {
 	current_func = func_data.symbol_id;
 	return_label = NoNode;
 	unsigned total_stack_size = get_total_stack_size_of_func(declared_vars);
@@ -436,20 +498,35 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 	case AST_Identifier:
 		gen_ident_ir(node, value_required);
 		break;
+	case AST_This:
+		emit_byte(OP_LOAD_THIS);
+		if (node.attr != NoNode)
+			gen_child_ir(node.attr, value_required);
+		break;
 	case AST_IdentIncrease:
 	case AST_IdentDecrease: {
 		NodeId id = node.type == AST_IdentIncrease ? std::get<IdentIncreAST>(node.ast).ident_node
-												   : std::get<IdentDecreAST>(node.ast).ident_node;
+			: std::get<IdentDecreAST>(node.ast).ident_node;
 		const Node &ident_node = pc.get_node(id);
 		if (value_required && ident_node.attr != NoNode)
 			panic("Member increment cannot be used as a value in this IR.", pc.tc);
-		const Node &target = gen_assignment_target(ident_node);
-		const IdentifierAST &ident_ast = std::get<IdentifierAST>(target.ast);
-		const VarData &var_data = pc.var_data.at(ident_ast.var_data);
-		if (node.type == AST_IdentDecrease)
-			gen_ident_decre_ir(var_data, ident_ast.is_attr);
+		const IdentifierAST target = gen_assignment_target(ident_node);
+		const VarData &var_data = pc.var_data.at(target.var_data);
+		if (target.vector_component >= 0) {
+			if (target.is_attr) {
+				emit_byte(OP_DUP);
+				emit_int(1);
+			}
+			gen_target_load_ir(target);
+			emit_byte(OP_LDC_F4);
+			emit_float(1.0f);
+			emit_byte(OP_EXPR_OP);
+			emit_byte(node.type == AST_IdentDecrease ? OP_SUB : OP_ADD);
+			gen_target_save_ir(target);
+		} else if (node.type == AST_IdentDecrease)
+			gen_ident_decre_ir(var_data, target.is_attr);
 		else
-			gen_ident_incre_ir(var_data, ident_ast.is_attr);
+			gen_ident_incre_ir(var_data, target.is_attr);
 		if (value_required)
 			gen_ident_load_ir(var_data, false);
 		break;
@@ -479,30 +556,31 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			const Node &left = pc.get_node(bin_expr_ast.left);
 			if (value_required && left.attr != NoNode)
 				panic("Member assignment cannot be used as a value in this IR.", pc.tc);
-			const Node &target = gen_assignment_target(left);
-			const IdentifierAST &ident_ast = std::get<IdentifierAST>(target.ast);
-			const VarData &var_data = pc.var_data.at(ident_ast.var_data);
+			const IdentifierAST target = gen_assignment_target(left);
+			const VarData &var_data = pc.var_data.at(target.var_data);
+			const Type type = target.vector_component >= 0 ? find_type(pc, "float") : var_data.type;
 			if (compound) {
-				if (ident_ast.is_attr) {
+				if (target.is_attr) {
 					// Keep the evaluated receiver for the store.
 					emit_byte(OP_DUP);
 					emit_int(1);
 				}
-				gen_ident_load_ir(var_data, ident_ast.is_attr);
+				gen_target_load_ir(target);
 			}
 			gen_child_ir(bin_expr_ast.right);
 			if (compound) {
 				emit_byte(OP_EXPR_OP);
 				emit_byte(get_op_byte(bin_expr_ast.op_type));
-				gen_conversion(semantics.infer_operation_type(pc, var_data.type,
-					semantics.infer_type(pc, pc.get_node(bin_expr_ast.right))), var_data.type);
+				gen_conversion(semantics.infer_operation_type(pc, type,
+					semantics.infer_type(pc, pc.get_node(bin_expr_ast.right))), type);
 			}
 			else
-				gen_conversion(semantics.infer_type(pc, pc.get_node(bin_expr_ast.right)), var_data.type);
-			gen_ident_save_ir(var_data, ident_ast.is_attr);
+				gen_conversion(semantics.infer_type(pc, pc.get_node(bin_expr_ast.right)), type);
+			gen_target_save_ir(target);
 			if (value_required)
 				gen_ident_load_ir(var_data, false);
-		} else {
+		}
+		else {
 			gen_child_ir(bin_expr_ast.left);
 			gen_child_ir(bin_expr_ast.right);
 			emit_byte(OP_EXPR_OP);
@@ -607,15 +685,15 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 	case AST_FunctionDeclaration: {
 		const FuncDeclAST &func_decl_ast = std::get<FuncDeclAST>(node.ast);
 		gen_function_ir(pc.func_data.at(func_decl_ast.func_data),
-						func_decl_ast.declared_vars,
-						func_decl_ast.body);
+			func_decl_ast.declared_vars,
+			func_decl_ast.body);
 		break;
 	}
 	case AST_Constructor: {
 		const ConstructorAST &constructor_ast = std::get<ConstructorAST>(node.ast);
 		gen_function_ir(pc.func_data.at(constructor_ast.func_data),
-						constructor_ast.declared_vars,
-						constructor_ast.body);
+			constructor_ast.declared_vars,
+			constructor_ast.body);
 		break;
 	}
 	case AST_Return: {
@@ -661,15 +739,23 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 
 void IRContext::gen_rodata() {
 	emit_byte(RODATA_BEGIN);
-	std::vector<RODATA_Str> ordered(str_rodata.size());
+	std::map<unsigned, std::string> ordered;
 	for (const auto &entry : str_rodata)
-		ordered.at(entry.second.id) = entry.second;
-	for (const RODATA_Str &rodata_str : ordered) {
+		ordered.emplace(entry.second.id, entry.second.str);
+	for (const auto &[id, value] : ordered) {
 		emit_byte(RODATA_STR);
-		emit_int(rodata_str.id);
-		emit_str(rodata_str.str);
+		emit_int(id);
+		emit_str(value);
 	}
 	emit_byte(RODATA_END);
+}
+
+void IRContext::gen_unit(std::span<const Node> nodes, const std::vector<std::string> &imports) {
+	gen_metadata(nodes, imports);
+	emit_byte(CODE_BEGIN);
+	for (const Node &node : nodes) gen_node_ir(node);
+	emit_byte(CODE_END);
+	gen_rodata();
 }
 
 void IRContext::gen_ir(ParserContext input_pc) {
@@ -677,14 +763,37 @@ void IRContext::gen_ir(ParserContext input_pc) {
 	pc = std::move(input_pc);
 	try {
 		semantics.resolve_semantics(pc);
-		gen_metadata();
-		emit_byte(CODE_BEGIN);
-		for (const Node &node : pc.nodes)
-			gen_node_ir(node);
-		emit_byte(CODE_END);
-		gen_rodata();
-	} catch (...) {
+		gen_unit(pc.nodes, {});
+	}
+	catch (...) {
 		init_irc();
 		throw;
 	}
+}
+
+static std::string bytecode_import(const std::string &source, const std::string &dependency) {
+	const std::filesystem::path origin(std::u8string(source.begin(), source.end()));
+	std::filesystem::path path(std::u8string(dependency.begin(), dependency.end()));
+	path.replace_extension(".ob");
+	const auto relative = path.lexically_relative(origin.parent_path());
+	const auto name = (relative.empty() ? path : relative).generic_u8string();
+	return std::string(name.begin(), name.end());
+}
+
+std::vector<IRFile> IRContext::gen_files(ParserContext input_pc) {
+	init_irc();
+	pc = std::move(input_pc);
+	semantics.resolve_semantics(pc);
+	std::vector<IRFile> files;
+	for (const SourceFile &source : pc.source_files) {
+		bytes.clear();
+		str_rodata.clear();
+		label_id = 0;
+		std::vector<std::string> imports;
+		for (const std::string &dependency : source.imports)
+			imports.push_back(bytecode_import(source.path, dependency));
+		gen_unit(std::span<const Node>(pc.nodes).subspan(source.first_node, source.node_count), imports);
+		files.push_back({source.path, std::move(bytes)});
+	}
+	return files;
 }

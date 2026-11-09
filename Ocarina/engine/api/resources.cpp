@@ -2,15 +2,15 @@
 
 #include "../util/util.h"
 #include <limits>
-#include <stdexcept>
+#include "../../ovm_panic.h"
 
 void TonicContext::check_path(const std::string &path) {
-	if (path.empty() || path.find('\0') != std::string::npos) throw std::runtime_error("Invalid asset path.");
-	if (!file_exists(resolve_resource_path(path))) throw std::runtime_error("Asset not found: " + path);
+	if (path.empty() || path.find('\0') != std::string::npos) throw OVMPanic("Invalid asset path.");
+	if (!file_exists(resolve_resource_path(path))) throw OVMPanic("Asset not found: " + path);
 }
 
 int TonicContext::new_handle() {
-	if (next_handle == std::numeric_limits<int>::max()) throw std::runtime_error("Tonic handle limit reached.");
+	if (next_handle == std::numeric_limits<int>::max()) throw OVMPanic("Tonic handle limit reached.");
 	return next_handle++;
 }
 

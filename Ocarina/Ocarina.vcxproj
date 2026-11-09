@@ -98,6 +98,7 @@
     <ClCompile Include="lexer.cpp" />
     <ClCompile Include="parser.cpp" />
     <ClCompile Include="source_files.cpp" />
+    <ClCompile Include="shell_commands.cpp" />
     <ClCompile Include="type.cpp" />
     <ClCompile Include="semantics.cpp" />
     <ClCompile Include="syscall.cpp" />
@@ -115,6 +116,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="vm.h" />
+    <ClInclude Include="ovm_panic.h" />
+    <ClInclude Include="shell_commands.h" />
     <ClInclude Include="code_data.h" />
     <ClInclude Include="ir_load.h" />
     <ClInclude Include="lexer.h" />
@@ -140,6 +143,7 @@
   </ItemGroup>
   <PropertyGroup>
     <OutDir>$(ProjectDir)..\x64\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <Target Name="CheckEngineArchitecture" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(Platform)' != 'x64'" Text="The bundled engine dependencies require the x64 platform." />

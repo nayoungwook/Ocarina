@@ -3,7 +3,7 @@
 #include "vm_numeric.h"
 
 #include <cstring>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 void VMStorage::resize(unsigned capacity) {
 	size = capacity;
@@ -33,15 +33,15 @@ void VMStorage::increment(unsigned offset, unsigned size, bool decrease) {
 	save(offset, size, convert_argument(operand, target));
 }
 
-VMHierarchyObject &CVM::find_object(const VMOperand &operand) {
+VMHierarchyObject &OVM::find_object(const VMOperand &operand) {
 	if (operand.op_type != VMOPType::OPRND_ADDRESS || operand.val.i32 <= 0 ||
 		static_cast<std::size_t>(operand.val.i32) >= hierarchy.size())
-		throw std::runtime_error("Invalid or null object reference.");
+		throw OVMPanic("Invalid or null object reference.");
 
 	return hierarchy.at(static_cast<unsigned>(operand.val.i32));
 }
 
-const VMFunctionData &CVM::vm_find_member_function_data(unsigned object_id, unsigned id) const {
+const VMFunctionData &OVM::vm_find_member_function_data(unsigned object_id, unsigned id) const {
 	for (std::size_t depth = 0; depth < this->object_data.size(); ++depth) {
 		const VMObjectData &object_data = this->object_data.at(object_id);
 		const auto found = object_data.function_data.find(id);
@@ -52,14 +52,14 @@ const VMFunctionData &CVM::vm_find_member_function_data(unsigned object_id, unsi
 			break;
 		object_id = object_data.parent_id;
 	}
-	throw std::runtime_error("Member function not found: " + std::to_string(id));
+	throw OVMPanic("Member function not found: " + std::to_string(id));
 }
 
-void CVM::vm_exec_object_initializers(unsigned object_id, unsigned hierarchy_index) {
+void OVM::vm_exec_object_initializers(unsigned object_id, unsigned hierarchy_index) {
 	std::vector<unsigned> parents;
 	while (object_id != 0) {
 		if (parents.size() >= this->object_data.size())
-			throw std::runtime_error("Cyclic object inheritance.");
+			throw OVMPanic("Cyclic object inheritance.");
 		parents.push_back(object_id);
 		object_id = this->object_data.at(object_id).parent_id;
 	}
@@ -80,7 +80,7 @@ void CVM::vm_exec_object_initializers(unsigned object_id, unsigned hierarchy_ind
 	}
 }
 
-void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hierarchy_index) {
+void OVM::exec_object_instruction(const VMInstruction &instruction, unsigned hierarchy_index) {
 	const auto &arguments = instruction.operands.u32;
 
 	if (instruction.opcode == OP_NEW_OBJECT) {
@@ -97,11 +97,11 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hie
 		if (instruction.operands.i32[2] >= 0) {
 			const VMFunctionData &constructor = object_data.function_data.at(arguments[2]);
 			if (!constructor.is_constructor)
-				throw std::runtime_error("Object constructor expected.");
+				throw OVMPanic("Object constructor expected.");
 			push_frame(constructor, std::move(operands), hierarchy_index);
 		}
 		else if (!operands.empty())
-			throw std::runtime_error("Arguments supplied to an object without a constructor.");
+			throw OVMPanic("Arguments supplied to an object without a constructor.");
 
 		VMOperand operand;
 		operand.op_type = VMOPType::OPRND_ADDRESS;
@@ -119,6 +119,7 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hie
 		instruction.opcode == OP_DECRE_ATTR || instruction.opcode == OP_SAVE_ATTR;
 	const bool save = instruction.opcode == OP_SAVE_OBJECT || instruction.opcode == OP_SAVE_ATTR;
 	VMOperand value;
+	
 	if (save)
 		value = vm_stack_pop();
 
@@ -127,8 +128,9 @@ void CVM::exec_object_instruction(const VMInstruction &instruction, unsigned hie
 		find_object(object);
 		hierarchy_index = static_cast<unsigned>(object.val.i32);
 	}
+
 	if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
-		throw std::runtime_error("Object instruction requires a valid receiver.");
+		throw OVMPanic("Object instruction requires a valid receiver.");
 
 	const unsigned offset = arguments[0];
 	const unsigned size = arguments[1];

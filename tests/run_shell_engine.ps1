@@ -3,8 +3,10 @@ param([string]$Executable = "$PSScriptRoot\..\x64\Debug\Ocarina.exe")
 $ErrorActionPreference = 'Stop'
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
 $repo = [IO.Path]::GetFullPath("$PSScriptRoot\..")
-$windowSource = Join-Path $PSScriptRoot 'shell_window.cn'
-$basicSource = Join-Path $repo 'x64\Debug\test_basic.cn'
+$windowSource = Join-Path $PSScriptRoot 'shell_window.oc'
+$basicSource = Join-Path $PSScriptRoot 'compound_assignment.oc'
+$windowBytecode = [IO.Path]::ChangeExtension($windowSource, '.ob')
+$basicBytecode = [IO.Path]::ChangeExtension($basicSource, '.ob')
 
 function Start-Session {
     $info = [Diagnostics.ProcessStartInfo]::new()
@@ -68,7 +70,8 @@ function Close-Session($Session) {
 $session = Start-Session
 try {
     [void](Read-Until $session '>>')
-    [void](Send-Command $session "register $windowSource")
+    [void](Send-Command $session "compile $windowSource")
+    [void](Send-Command $session "register $windowBytecode")
     $output = Send-Command $session 'run'
     if (-not $output.Contains('Starting engine...') -or -not $output.Contains('WINDOW_SCRIPT_DONE')) {
         throw "Window did not start: $output"
@@ -83,11 +86,13 @@ try {
     $output = Send-Command $session 'run'
     if (-not $output.Contains('Starting engine...')) { throw "Window did not reopen: $output" }
     Write-Output 'PASS: stop keeps the shell alive and permits reopening'
-    [void](Send-Command $session "register $basicSource")
+    [void](Send-Command $session "compile $basicSource")
+    [void](Send-Command $session "register $basicBytecode")
     $output = Send-Command $session 'run'
-    if (-not $output.Contains('TOTAL: 84 | PASS: 84 | FAIL: 0')) { throw "Basic tests failed: $output" }
-    Write-Output 'PASS: register replaces a window program; all 84 basic tests pass'
-    [void](Send-Command $session "register $windowSource")
+    if (-not $output.Contains((Get-Content -LiteralPath "$PSScriptRoot/compound_assignment.expected.txt" -Raw).Trim())) { throw "Basic tests failed: $output" }
+    Write-Output 'PASS: register replaces a window program; compound assignment tests pass'
+    [void](Send-Command $session "compile $windowSource")
+    [void](Send-Command $session "register $windowBytecode")
     [void](Send-Command $session 'run')
     # Keep stdin open: quit must join the reader without waiting for EOF.
     $session.Process.StandardInput.WriteLine('quit')
@@ -100,10 +105,11 @@ try {
 $session = Start-Session
 try {
     [void](Read-Until $session '>>')
-    [void](Send-Command $session "register $windowSource")
+    [void](Send-Command $session "compile $windowSource")
+    [void](Send-Command $session "register $windowBytecode")
     [void](Send-Command $session 'run')
-    $missing = Join-Path $repo 'build-vs\shell-engine-missing-bytecode.cb'
-    [void](Send-Command $session "load $missing")
+    $missing = Join-Path $repo 'build-vs\shell-engine-missing-bytecode.ob'
+    [void](Send-Command $session "register $missing")
     [void](Send-Command $session '')
     $session.Process.StandardInput.Close()
     Finish-Session $session $missing
@@ -115,7 +121,8 @@ try {
 $session = Start-Session
 try {
     [void](Read-Until $session '>>')
-    $session.Process.StandardInput.WriteLine("register $windowSource")
+    $session.Process.StandardInput.WriteLine("compile $windowSource")
+    $session.Process.StandardInput.WriteLine("register $windowBytecode")
     $session.Process.StandardInput.WriteLine('run')
     $session.Process.StandardInput.Close()
     Finish-Session $session

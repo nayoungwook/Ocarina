@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 unsigned get_operand_size(VMOPType op_type) {
 	switch (op_type) {
@@ -53,7 +53,7 @@ static double unpack_numeric_operand(const VMOperand &operand) {
 	case VMOPType::OPRND_FLOAT64:
 		return operand.val.f64;
 	default:
-		throw std::runtime_error("Expected a numeric operand.");
+		throw OVMPanic("Expected a numeric operand.");
 	}
 }
 
@@ -70,7 +70,7 @@ VMOperand convert_argument(VMOperand operand, VMOPType target) {
 		return operand;
 
 	if (get_operand_level(operand.op_type) < 0 || get_operand_level(target) < 0)
-		throw std::runtime_error("Incompatible operand types.");
+		throw OVMPanic("Incompatible operand types.");
 
 	VMOperand result;
 	result.op_type = target;
@@ -92,7 +92,7 @@ VMOperand convert_argument(VMOperand operand, VMOPType target) {
 	else {
 		if (!std::isfinite(value) || value < std::numeric_limits<std::int32_t>::min() ||
 			value > std::numeric_limits<std::int32_t>::max())
-			throw std::runtime_error("Integer conversion overflow.");
+			throw OVMPanic("Integer conversion overflow.");
 
 		result.val.i32 = static_cast<std::int32_t>(value);
 		if (target == VMOPType::OPRND_CHAR16)
@@ -121,7 +121,7 @@ template <typename T> static T numeric_operation(std::uint8_t opcode, T lhs, T r
 		return lhs * rhs;
 	case OP_DIV:
 		if (rhs == 0)
-			throw std::runtime_error("Division by zero.");
+			throw OVMPanic("Division by zero.");
 		return lhs / rhs;
 	case OP_EQUAL:
 		return lhs == rhs;
@@ -141,10 +141,10 @@ template <typename T> static T numeric_operation(std::uint8_t opcode, T lhs, T r
 		return lhs != 0 && rhs != 0;
 	case OP_MOD:
 		if (rhs == 0)
-			throw std::runtime_error("Remainder by zero.");
+			throw OVMPanic("Remainder by zero.");
 		return static_cast<T>(std::fmod(lhs, rhs));
 	default:
-		throw std::runtime_error("Unknown numeric operator.");
+		throw OVMPanic("Unknown numeric operator.");
 	}
 }
 
@@ -159,7 +159,7 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 		if ((opcode != OP_EQUAL && opcode != OP_NOTEQUAL) ||
 			(lhs.op_type != rhs.op_type && lhs.op_type != VMOPType::OPRND_NULL &&
 				rhs.op_type != VMOPType::OPRND_NULL))
-			throw std::runtime_error("Unsupported operand types for numeric operator.");
+			throw OVMPanic("Unsupported operand types for numeric operator.");
 
 		const std::uint64_t lhs_value = static_cast<std::uint32_t>(lhs.val.i32);
 		const std::uint64_t rhs_value = static_cast<std::uint32_t>(rhs.val.i32);
@@ -172,7 +172,7 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 	const int level = std::max(lhs_level, rhs_level);
 	if (level == 3) {
 		if (opcode == OP_OR || opcode == OP_AND)
-			throw std::runtime_error("Logical operators do not support vectors.");
+			throw OVMPanic("Logical operators do not support vectors.");
 
 		const VMOperand a = convert_argument(lhs, VMOPType::OPRND_VEC);
 		const VMOperand b = convert_argument(rhs, VMOPType::OPRND_VEC);
@@ -210,7 +210,7 @@ VMOperand vm_numeric_operation(std::uint8_t opcode, const VMOperand &lhs, const 
 		std::int64_t value;
 		if (opcode == OP_MOD) {
 			if (b == 0)
-				throw std::runtime_error("Remainder by zero.");
+				throw OVMPanic("Remainder by zero.");
 			value = a % b;
 		}
 		else
@@ -256,7 +256,7 @@ VMOperand vm_negate(VMOperand operand) {
 			value = -value;
 		break;
 	default:
-		throw std::runtime_error("Invalid operand for negation.");
+		throw OVMPanic("Invalid operand for negation.");
 	}
 	return operand;
 }

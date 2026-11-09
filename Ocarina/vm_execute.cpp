@@ -3,7 +3,7 @@
 #include "vm_opcode.h"
 
 #include <algorithm>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 static constexpr unsigned VM_STACK_SIZE = 1024 * 1024;
 static constexpr unsigned VM_OPERAND_STACK_SIZE = 1024 * 256;
@@ -12,7 +12,7 @@ static constexpr unsigned VM_CALL_DEPTH = 512;
 VMFrame::VMFrame(const VMFunctionData &function_data) : function_data(function_data) {
 }
 
-void CVM::clear_execution() {
+void OVM::clear_execution() {
 	frames.clear();
 	vm_stack.clear();
 	hierarchy.reset();
@@ -22,25 +22,25 @@ void CVM::clear_execution() {
 	output.reset();
 }
 
-void CVM::vm_stack_push(VMOperand operand) {
+void OVM::vm_stack_push(VMOperand operand) {
 	if (vm_stack.size() >= VM_OPERAND_STACK_SIZE)
-		throw std::runtime_error("VM operand stack overflow.");
+		throw OVMPanic("VM operand stack overflow.");
 	vm_stack.push_back(operand);
 }
 
-VMOperand CVM::vm_stack_pop() {
+VMOperand OVM::vm_stack_pop() {
 	if (vm_stack.empty() || (!frames.empty() && vm_stack.size() <= frames.back().operand_base))
-		throw std::runtime_error("VM operand stack underflow.");
+		throw OVMPanic("VM operand stack underflow.");
 
 	VMOperand operand = vm_stack.back();
 	vm_stack.pop_back();
 	return operand;
 }
 
-std::vector<VMOperand> CVM::update_function_arguments(unsigned argument_count) {
+std::vector<VMOperand> OVM::update_function_arguments(unsigned argument_count) {
 	const std::size_t base = frames.empty() ? 0 : frames.back().operand_base;
 	if (argument_count > vm_stack.size() - base)
-		throw std::runtime_error("Not enough function arguments on the operand stack.");
+		throw OVMPanic("Not enough function arguments on the operand stack.");
 
 	std::vector<VMOperand> arguments(argument_count);
 	for (unsigned i = 0; i < argument_count; ++i) {
@@ -50,35 +50,42 @@ std::vector<VMOperand> CVM::update_function_arguments(unsigned argument_count) {
 	return arguments;
 }
 
-void CVM::call_function(const VMFunctionData &function_data,
-						unsigned argument_count,
-						unsigned hierarchy_index,
-						bool receiver) {
+// hierarchy_index identifies the receiver object in the hierarchy.
+// For a.foo(), hierarchy_index is a's instance index.
+// receiver is true when the receiver must be popped from the operand stack.
+void OVM::call_function(const VMFunctionData &function_data,
+	unsigned argument_count,
+	unsigned hierarchy_index,
+	bool receiver) {
 	std::vector<VMOperand> arguments = update_function_arguments(argument_count);
+
 	if (receiver) {
 		const VMOperand object = vm_stack_pop();
 		find_object(object);
 		if (static_cast<unsigned>(object.val.i32) != hierarchy_index)
-			throw std::runtime_error("Invalid method receiver.");
+			throw OVMPanic("Invalid method receiver.");
 	}
+
 	push_frame(function_data, std::move(arguments), hierarchy_index);
 }
 
-void CVM::push_frame(const VMFunctionData &function_data,
-					 std::vector<VMOperand> arguments,
-					 unsigned hierarchy_index) {
+void OVM::push_frame(const VMFunctionData &function_data,
+	std::vector<VMOperand> arguments,
+	unsigned hierarchy_index) {
+
 	if (!function_data.code_loaded)
-		throw std::runtime_error("Function code is not loaded: " + function_data.name);
+		throw OVMPanic("Function code is not loaded: " + function_data.name);
 	if (arguments.size() != function_data.argument_count)
-		throw std::runtime_error("Wrong argument count for function: " + function_data.name);
+		throw OVMPanic("Wrong argument count for function: " + function_data.name);
 	if (frames.size() >= VM_CALL_DEPTH || function_data.stack_size > VM_STACK_SIZE - stack_size)
-		throw std::runtime_error("VM call stack overflow.");
+		throw OVMPanic("VM call stack overflow.");
 
 	VMFrame frame(function_data);
-	frame.data.resize(function_data.stack_size);
+	frame.data.resize(function_data.stack_size); // allocate stack buffer.
 	frame.hierarchy_index = hierarchy_index;
 	frame.operand_base = vm_stack.size();
 
+	// upload arguments into stack buffer.
 	unsigned offset = 0;
 	for (std::size_t i = 0; i < arguments.size(); ++i) {
 		const unsigned size = function_data.argument_sizes[i];
@@ -90,19 +97,23 @@ void CVM::push_frame(const VMFunctionData &function_data,
 	stack_size += function_data.stack_size;
 }
 
-std::optional<VMOperand> CVM::finish_frame() {
+std::optional<VMOperand> OVM::finish_frame() {
 	VMFrame &frame = frames.back();
 	const VMFunctionData &function_data = frame.function_data.get();
 	std::optional<VMOperand> result;
 
-	if (function_data.return_type != "void" && !function_data.is_constructor) {
-		if (!frame.return_value) {
+	bool should_return_value = function_data.return_type != "void" && !function_data.is_constructor;
+	if (should_return_value) {
+		if (!frame.return_value) { // Should return value!!!
 			if (vm_stack.size() <= frame.operand_base)
-				throw std::runtime_error("Function did not return a value.");
+				throw OVMPanic("Function did not return a value.");
+
 			frame.return_value = vm_stack_pop();
 		}
+
 		result = *frame.return_value;
 	}
+
 	if (frame.result_override)
 		result = frame.result_override;
 
@@ -112,7 +123,7 @@ std::optional<VMOperand> CVM::finish_frame() {
 	return result;
 }
 
-std::optional<VMOperand> CVM::vm_exec_function(const VMFunctionData &function_data) {
+std::optional<VMOperand> OVM::vm_exec_function(const VMFunctionData &function_data) {
 	push_frame(function_data);
 
 	try {
@@ -135,24 +146,25 @@ std::optional<VMOperand> CVM::vm_exec_function(const VMFunctionData &function_da
 			if (result)
 				vm_stack_push(*result);
 		}
-	} catch (const std::exception &error) {
+	}
+	catch (const std::exception &error) {
 		std::string message = error.what();
 		for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame) {
 			const auto &function = frame->function_data.get();
 			const std::size_t index =
 				frame->instruction_index == 0 ? 0 : frame->instruction_index - 1;
 			message += "\n  at " +
-					   (function.name.empty() ? std::string("<initializer>") : function.name) +
-					   " instruction " + std::to_string(index);
+				(function.name.empty() ? std::string("<initializer>") : function.name) +
+				" instruction " + std::to_string(index);
 		}
-		throw std::runtime_error(message);
+		throw OVMPanic(message);
 	}
 	return std::nullopt;
 }
 
-std::optional<VMOperand> CVM::run(std::ostream &out, RunMode mode) {
+std::optional<VMOperand> OVM::run(std::ostream &out, RunMode mode) {
 	if (syscalls)
-		throw std::runtime_error("This CVM is already running.");
+		throw OVMPanic("This OVM is already running.");
 	clear_execution();
 
 	SyscallContext context(*this);
@@ -166,9 +178,9 @@ std::optional<VMOperand> CVM::run(std::ostream &out, RunMode mode) {
 		globals.resize(global_size);
 		const auto entry = function_data.find(main_func_id);
 		if (entry == function_data.end())
-			throw std::runtime_error("Bytecode has no main function.");
+			throw OVMPanic("Bytecode has no main function.");
 		if (entry->second.argument_count != 0)
-			throw std::runtime_error("main must not require arguments.");
+			throw OVMPanic("main must not require arguments.");
 
 		if (initializer.code_loaded)
 			vm_exec_function(initializer);
@@ -180,7 +192,8 @@ std::optional<VMOperand> CVM::run(std::ostream &out, RunMode mode) {
 		}
 		clear_execution();
 		return result;
-	} catch (...) {
+	}
+	catch (...) {
 		engine.shutdown();
 		clear_execution();
 		throw;

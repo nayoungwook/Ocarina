@@ -39,6 +39,7 @@ enum ASTType {
 	AST_Null = 17,
 	AST_BoolLiteral = 20,
 	AST_Negative = 21,
+	AST_This = 22,
 };
 
 struct NumberLiteralAST {
@@ -53,6 +54,7 @@ struct StringLiteralAST {
 struct IdentifierAST {
 	struct Token ident;
 	bool is_attr = {};
+	int vector_component = -1;
 
 	// semantics
 	std::size_t var_data = NoNode;
@@ -206,13 +208,18 @@ struct NullAST {
 	struct Token null_tok;
 };
 
+struct ThisAST {
+	struct Token this_tok;
+	std::size_t object_data = NoNode;
+};
+
 struct NegAST {
 	NodeId ast = NoNode;
 };
 
 struct Node {
 	enum ASTType type = AST_None;
-	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, NegAST> ast;
+	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, NegAST, ThisAST> ast;
 	NodeId attr = NoNode;
 };
 

@@ -4,7 +4,7 @@
 
 #include <cctype>
 #include <filesystem>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -21,7 +21,7 @@ static std::filesystem::path executable_directory() {
 	std::wstring path(256, L'\0');
 	while (true) {
 		DWORD size = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
-		if (size == 0) throw std::runtime_error("Failed to locate the executable.");
+		if (size == 0) throw OVMPanic("Failed to locate the executable.");
 		if (size < path.size()) {
 			path.resize(size);
 			return std::filesystem::path(path).parent_path();
@@ -35,8 +35,8 @@ static std::filesystem::path executable_directory() {
 #endif
 }
 
-void ParserContext::register_file(const std::string &path) {
-	if (path.find('\0') != std::string::npos) throw std::runtime_error("File path contains a null character.");
+std::string ParserContext::register_file(const std::string &path) {
+	if (path.find('\0') != std::string::npos) throw OVMPanic("File path contains a null character.");
 	std::filesystem::path file_path(std::u8string(path.begin(), path.end()));
 	if (file_path.is_relative()) file_path = executable_directory() / file_path;
 	file_path = std::filesystem::canonical(file_path);
@@ -46,9 +46,10 @@ void ParserContext::register_file(const std::string &path) {
 #ifdef _WIN32
 	for (char &ch : key) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 #endif
-	if (registered_files.contains(key)) return;
+	if (registered_files.contains(key)) return registered_files.at(key);
 	first_pass_queue.emplace(read_file(source_name), source_name);
-	registered_files.insert(std::move(key));
+	registered_files.emplace(std::move(key), source_name);
+	return source_name;
 }
 
 void ParserContext::register_import(const std::string &path) {
@@ -59,8 +60,12 @@ void ParserContext::register_import(const std::string &path) {
 		if (!source_path.is_absolute()) base = executable_directory() / base;
 		file_path = base / file_path;
 	}
-	const auto utf8 = file_path.u8string();
-	try { register_file(std::string(utf8.begin(), utf8.end())); }
+	try {
+		file_path = std::filesystem::canonical(file_path);
+		const auto utf8 = file_path.u8string();
+		const std::string source = register_file(std::string(utf8.begin(), utf8.end()));
+		imports[tc.source_name].push_back(source);
+	}
 	catch (const std::exception &error) { panic("Failed to import " + path + ": " + error.what(), tc); }
 }
 
@@ -75,11 +80,24 @@ void ParserContext::resolve_first_pass_queue() {
 }
 
 void ParserContext::resolve_second_pass_queue() {
+	std::unordered_map<std::string, TokenizerContext> files;
+	std::vector<std::string> names;
 	while (!second_pass_queue.empty()) {
-		TokenizerContext tc = std::move(second_pass_queue.front());
+		TokenizerContext source = std::move(second_pass_queue.front());
 		second_pass_queue.pop();
-		compile_file(std::move(tc));
+		names.push_back(source.source_name);
+		files.emplace(names.back(), std::move(source));
 	}
+	std::unordered_set<std::string> compiled;
+	for (const std::string &name : names) compile_source(name, files, compiled);
+}
+
+void ParserContext::compile_source(const std::string &path,
+	std::unordered_map<std::string, TokenizerContext> &files,
+	std::unordered_set<std::string> &compiled) {
+	if (!compiled.insert(path).second) return;
+	for (const std::string &dependency : imports[path]) compile_source(dependency, files, compiled);
+	compile_file(std::move(files.at(path)));
 }
 
 void ParserContext::resolve_preprocessor() {

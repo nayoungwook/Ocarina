@@ -6,7 +6,7 @@
 #include <optional>
 #include <span>
 
-class CVM;
+class OVM;
 
 union VMNumericValue {
 	std::int32_t i32;
@@ -25,7 +25,7 @@ struct VMOperand {
 
 class SyscallContext {
 public:
-	SyscallContext(CVM &vm);
+	SyscallContext(OVM &vm);
 	~SyscallContext() = default;
 	SyscallContext(const SyscallContext &) = delete;
 	SyscallContext &operator=(const SyscallContext &) = delete;
@@ -41,5 +41,5 @@ private:
 		std::ostream &out) const;
 	VMOperand vector(std::span<const VMOperand> arguments) const;
 	VMOperand window(std::span<const VMOperand> arguments, const VMStringPool &vm_string_pool);
-	CVM &vm;
+	OVM &vm;
 };

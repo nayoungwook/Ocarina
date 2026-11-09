@@ -38,10 +38,12 @@ const FuncData &ParserContext::get_func_data(const FuncCallAST &func_call_ast) c
 
 void ParserContext::compile_file(TokenizerContext input_tc) {
 	tc = std::move(input_tc);
+	const std::size_t first = nodes.size();
 	while (tc.peek().type != TokenType::TokEOF) {
 		struct Node node = parse_stmt();
 		nodes.push_back(std::move(node));
 	}
+	source_files.push_back({tc.source_name, first, nodes.size() - first, imports[tc.source_name]});
 }
 
 NodeId ParserContext::store_node(struct Node node) {
@@ -55,6 +57,12 @@ Token ParserContext::parse_type_token() {
 	return tc.consume(TokenType::TokIdent);
 }
 
+bool ParserContext::is_variable_target(const Node &node) const {
+	const Node *target = &node;
+	while (target->attr != NoNode) target = &get_node(target->attr);
+	return target->type == AST_Identifier;
+}
+
 const struct Node &ParserContext::get_node(NodeId id) const {
 	return node_pool.at(id);
 }
@@ -66,6 +74,7 @@ struct Node &ParserContext::get_node(NodeId id) {
 struct ParamData ParserContext::parse_func_call_params() {
 	struct ParamData param_data = {};
 	tc.consume(TokenType::TokLParen);
+	
 	while (tc.peek().type != TokenType::TokRParen) {
 		struct Node expr = parse_expression();
 		param_data.params.push_back(std::move(expr));
@@ -73,6 +82,7 @@ struct ParamData ParserContext::parse_func_call_params() {
 		tc.consume(TokenType::TokComma);
 		if (tc.peek().type == TokenType::TokRParen) panic("Expected argument after comma.", tc);
 	}
+
 	tc.consume(TokenType::TokRParen);
 	return param_data;
 }
@@ -90,10 +100,13 @@ struct Node ParserContext::gen_func_call_node(const struct Token &first) {
 
 void ParserContext::parse_attribute(struct Node &ident_node) {
 	if (tc.peek().type != TokenType::TokIdent) panic("Expected attribute name.", tc);
+	
 	struct Node attr = parse_expr_node();
 	if (attr.type == AST_Identifier) std::get<IdentifierAST>(attr.ast).is_attr = true;
 	if (attr.type == AST_FunctionCall) std::get<FuncCallAST>(attr.ast).is_attr = true;
+	
 	NodeId id = store_node(std::move(attr));
+	
 	if (ident_node.attr == NoNode) {
 		ident_node.attr = id;
 	}
@@ -119,6 +132,7 @@ struct Node ParserContext::gen_ident_node(const struct Token &first) {
 struct Node ParserContext::gen_func_param_node() {
 	struct VarDeclBundleAST result = {};
 	tc.consume(TokenType::TokLParen);
+	
 	while (tc.peek().type != TokenType::TokRParen) {
 		struct Token name_tok = tc.consume(TokenType::TokIdent);
 		tc.consume(TokenType::TokColon);
@@ -132,7 +146,9 @@ struct Node ParserContext::gen_func_param_node() {
 		tc.consume(TokenType::TokComma);
 		if (tc.peek().type == TokenType::TokRParen) panic("Expected parameter after comma.", tc);
 	}
+	
 	tc.consume(TokenType::TokRParen);
+
 	return pack(AST_VariableDeclarationBundle, std::move(result));
 }
 
@@ -141,7 +157,7 @@ std::vector<struct Node> ParserContext::gen_body() {
 	std::vector<struct Node> result;
 	while (tc.peek().type != TokenType::TokRBracket) {
 		if (tc.peek().type == TokenType::TokEOF) panic("Expected closing brace.", tc);
-		struct Node element = parse_stmt();
+			struct Node element = parse_stmt();
 		result.push_back(std::move(element));
 	}
 	tc.consume(TokenType::TokRBracket);
@@ -396,7 +412,6 @@ struct Node ParserContext::parse_expr_node() {
 	struct Token first = tc.pull();
 
 	switch (first.type) {
-
 	case TokenType::TokNumberLiteral: {
 		struct NumberLiteralAST num = {};
 
@@ -437,6 +452,12 @@ struct Node ParserContext::parse_expr_node() {
 		null.null_tok = first;
 
 		return pack(AST_Null, std::move(null));
+	}
+
+	case TokenType::TokThis: {
+		ThisAST self;
+		self.this_tok = first;
+		return pack(AST_This, std::move(self));
 	}
 
 	case TokenType::TokNew: {
@@ -579,7 +600,7 @@ struct Node ParserContext::parse_prefix() {
 
 		struct Node node = parse_unary_expression();
 
-		if (node.type != AST_Identifier) {
+		if (!is_variable_target(node)) {
 			panic("Increasement (++) must be used with identifier!", pc.tc);
 		}
 
@@ -593,7 +614,7 @@ struct Node ParserContext::parse_prefix() {
 
 		struct Node node = parse_unary_expression();
 
-		if (node.type != AST_Identifier) {
+		if (!is_variable_target(node)) {
 			panic("Decreasement (--) must be used with identifier!", pc.tc);
 		}
 
@@ -640,7 +661,7 @@ struct Node ParserContext::parse_postfix() {
 		if (tok.type == TokenType::TokIncrease) {
 			tc.consume(TokenType::TokIncrease);
 
-			if (node.type != AST_Identifier) {
+			if (!is_variable_target(node)) {
 				panic("Increasement (++) must be used with identifier!", pc.tc);
 			}
 
@@ -654,7 +675,7 @@ struct Node ParserContext::parse_postfix() {
 		if (tok.type == TokenType::TokDecrease) {
 			tc.consume(TokenType::TokDecrease);
 
-			if (node.type != AST_Identifier) {
+			if (!is_variable_target(node)) {
 				panic("Decreasement (--) must be used with identifier!", pc.tc);
 			}
 
@@ -891,17 +912,21 @@ void ParserContext::parse_var_structure() {
 		parse_type_token();
 
 		struct Token tok = {};
+		unsigned parentheses = 0;
 
 		while ((tok = tc.pull()).type != TokenType::TokEOF) {
-			if (tok.type == TokenType::TokSemiColon) {
+			if (tok.type == TokenType::TokLParen) ++parentheses;
+			if (tok.type == TokenType::TokRParen && parentheses != 0) --parentheses;
+			if (tok.type == TokenType::TokSemiColon && parentheses == 0) {
 				comp = true;
 				break;
 			}
 
-			if (tok.type == TokenType::TokComma) {
+			if (tok.type == TokenType::TokComma && parentheses == 0) {
 				break;
 			}
 		}
+		if (tok.type == TokenType::TokEOF) panic("Expected semicolon after variable declaration.", tc);
 	}
 }
 

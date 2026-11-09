@@ -3,6 +3,7 @@
 #include "semantics.h"
 
 #include <cstdint>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -28,6 +29,7 @@
 
 // META_CONSTRUCTOR func_id(uint) func_str(char*)
 #define META_CONSTRUCTOR 0X07
+#define META_IMPORT 0x08 // required bytecode path, relative to this bytecode file
 
 #define CODE_BEGIN 0x51 // begining of code section
 #define CODE_END 0x52
@@ -123,12 +125,22 @@
 #define OP_DUP 0x9c // duplicate the top count(uint) operands in order
 #define OP_CONVERT 0x9d // convert top operand to compiler-selected VMOPType(uint)
 #define OP_ADD_CHILD 0x9e // receiver(uint): 0=current object, 1=operand stack
+#define OP_LOAD_THIS 0x9f // push the current receiver reference
+#define OP_VECTOR_COMPONENT 0xa0 // extract component(uint) from a vector value
+#define OP_SAVE_VECTOR_COMPONENT 0xa1 // storage(uint), vector offset(uint), component(uint)
+
+enum class VectorStorage : unsigned { Local, Global, Object, Attribute };
 
 using byte = std::uint8_t;
 
 struct RODATA_Str {
 	std::string str;
 	unsigned id = 0;
+};
+
+struct IRFile {
+	std::string source;
+	std::vector<byte> bytes;
 };
 
 class IRContext {
@@ -142,12 +154,14 @@ public:
 	void init_irc();
 	void emit_byte(byte _b);
 	void gen_ir(ParserContext input_pc);
+	std::vector<IRFile> gen_files(ParserContext input_pc);
 	const std::vector<byte> &get_bytes() const;
 
 private:
 	ParserContext pc;
 	SemanticsContext semantics;
 	std::size_t return_label = NoNode;
+	unsigned next_string_id = 0;
 	void emit_str(const std::string &str);
 	void emit_int(std::uint32_t si);
 	void emit_float(float f);
@@ -155,7 +169,9 @@ private:
 	void gen_func_metadata(const FuncData &fd, const std::vector<std::size_t> &declared_vars);
 	void gen_var_metadata(const VarData &vd);
 	void gen_object_metadata(const ObjectAST &object_ast);
-	void gen_metadata();
+	void gen_metadata(std::span<const Node> nodes, const std::vector<std::string> &imports);
+	void gen_unit(std::span<const Node> nodes, const std::vector<std::string> &imports);
+	void gen_global_metadata(const Node &node);
 	unsigned get_total_stack_size_of_func(const std::vector<std::size_t> &declared_vars) const;
 	RODATA_Str add_str_rodata(const std::string &str);
 	byte get_op_byte(OperatorType op_type) const;
@@ -169,7 +185,9 @@ private:
 	void gen_ident_decre_ir(const VarData &var_data, bool is_attr);
 	void gen_ident_update_ir(const VarData &var_data, bool is_attr, bool decrease);
 	void gen_ident_save_ir(const VarData &var_data, bool is_attr);
-	const Node &gen_assignment_target(const Node &node);
+	IdentifierAST gen_assignment_target(const Node &node);
+	void gen_target_load_ir(const IdentifierAST &target);
+	void gen_target_save_ir(const IdentifierAST &target);
 	void gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative = false);
 	void gen_zero(const Type &type);
 	void gen_function_ir(const FuncData &func_data, const std::vector<std::size_t> &declared_vars,

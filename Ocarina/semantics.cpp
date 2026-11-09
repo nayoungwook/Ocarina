@@ -14,29 +14,58 @@ static bool is_super_call(const Node &node) {
 		std::get<FuncCallAST>(node.ast).func_name_tok.str == "super";
 }
 
+static void add_builtin_member(ParserContext &pc, ObjectData &object,
+	const std::string &name,
+	const std::string &type_name) {
+	VarData data = {};
+	data.id = static_cast<unsigned>(object.member_vars.size() + 1);
+	data.symbol_id = pc.var_data.size();
+	data.type = find_type(pc, type_name);
+	data.var_name = name;
+	data.scope_data = ScopeObject;
+
+	pc.var_data.push_back(data);
+	object.member_vars.emplace(name, std::move(data));
+}
+
 void SemanticsContext::register_objects(ParserContext &pc) {
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
+
 		ObjectAST &object_ast = std::get<ObjectAST>(node.ast);
 		const std::string &object_name = object_ast.name_tok.str;
+
 		if (pc.primitive_type_smtb.contains(object_name)) panic("Object name conflicts with a primitive type: " + object_name, pc.tc);
+
 		for (const ObjectData &data : pc.object_data) {
 			if (data.object_type.type_str == object_name) panic("Duplicate object: " + object_name, pc.tc);
 		}
+
 		object_ast.object_data = pc.object_data.size();
+
 		ObjectData data = {};
 		data.id = static_cast<unsigned>(object_ast.object_data + 1);
 		data.object_type = gen_object_type(object_name);
 		data.object_type.data.object_data = object_ast.object_data;
+
+		add_builtin_member(pc, data, "position", "vector");
+		add_builtin_member(pc, data, "size", "vector");
+		add_builtin_member(pc, data, "rotation", "float");
+
 		pc.object_type_smtb[object_name] = data.object_type;
 		pc.object_data.push_back(std::move(data));
 	}
+
+	// register parent type.
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
+
 		ObjectAST &object_ast = std::get<ObjectAST>(node.ast);
 		if (object_ast.parent_name_tok.type == TokenType::TokEOF) continue;
+
 		Type parent_type = find_type(pc, object_ast.parent_name_tok.str);
 		if (parent_type.type_kind != TK_Object) panic("Parent must be an object.", pc.tc);
+
 		pc.object_data.at(object_ast.object_data).parent_type = std::move(parent_type);
 	}
 }
@@ -147,7 +176,7 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 	state[object_id] = 1;
 
 	ObjectData &object_data = pc.object_data.at(object_id);
-	unsigned offset = (4 * 3 + 4 * 2 + 4); // position (float * 3), size (float * 2), rotation (float)
+	unsigned offset = 0; // position (float * 3), size (float * 3), rotation (float)
 
 	if (!object_data.parent_type.type_str.empty()) {
 		std::size_t parent_id = object_data.parent_type.data.object_data;
@@ -295,7 +324,7 @@ void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &ex
 		return;
 	const auto scalar = [](const Type &type) {
 		return type.type_kind == TK_Numeric || type.type_str == "bool" || type.type_str == "char";
-	};
+		};
 	if (scalar(actual) && (scalar(expected) || expected.type_str == "vector"))
 		return;
 	while (actual.type_kind == TK_Object && actual.type_str != expected.type_str)
@@ -355,6 +384,18 @@ std::size_t SemanticsContext::bind_super_call(ParserContext &pc, const Node &nod
 
 void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node) {
 	if (node.attr == NoNode) return;
+	if (type_of_node.type_str == "vector") {
+		Node &component = pc.get_node(node.attr);
+		if (component.type != AST_Identifier)
+			panic("Vector components must be x, y or z.", pc.tc);
+		IdentifierAST &ident = std::get<IdentifierAST>(component.ast);
+		const std::string &name = ident.ident.str;
+		if (name != "x" && name != "y" && name != "z")
+			panic("Unknown vector component: " + name, pc.tc);
+		ident.vector_component = name == "x" ? 0 : name == "y" ? 1 : 2;
+		resolve_attr(pc, find_type(pc, "float"), component);
+		return;
+	}
 	if (type_of_node.type_kind != TK_Object) panic("Attribute access requires an object type.", pc.tc);
 	register_attr_data(pc, type_of_node.data.object_data, pc.get_node(node.attr));
 }
@@ -364,7 +405,9 @@ void SemanticsContext::register_attr_data(ParserContext &pc, std::size_t attr_of
 	if (node.type == AST_Identifier) {
 		IdentifierAST &ident_ast = std::get<IdentifierAST>(node.ast);
 		ident_ast.var_data = find_member_var_data(pc, attr_of, ident_ast.ident.str);
+
 		if (ident_ast.var_data == NoNode) panic("Unknown member variable: " + ident_ast.ident.str, pc.tc);
+
 		ident_ast.is_attr = true;
 		type_of_node = pc.var_data.at(ident_ast.var_data).type;
 	}
@@ -430,6 +473,14 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		if (current_func != NoNode) register_local_var_data(pc, var_decl);
 		break;
 	}
+	case AST_This: {
+		if (current_object == NoNode)
+			panic("this is only allowed in an object context.", pc.tc);
+		ThisAST &self = std::get<ThisAST>(node.ast);
+		self.object_data = current_object;
+		resolve_attr(pc, pc.object_data.at(current_object).object_type, node);
+		break;
+	}
 	case AST_Identifier: {
 		IdentifierAST &ident_ast = std::get<IdentifierAST>(node.ast);
 		ident_ast.var_data = find_var_data(pc, ident_ast.ident.str);
@@ -447,7 +498,8 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 			func_call_ast.super_object = bind_super_call(pc, node);
 			func_call_ast.func_data = pc.object_data.at(func_call_ast.super_object).constructor.symbol_id;
 			func_call_ast.is_syscall = false;
-		} else {
+		}
+		else {
 			func_call_ast.func_data = find_func_data(pc, func_call_ast.func_name_tok.str);
 			func_call_ast.is_syscall = func_call_ast.func_data == NoNode &&
 				pc.syscall_smtb.contains(func_call_ast.func_name_tok.str);
@@ -502,17 +554,18 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 			const auto numeric = [](const Type &type) {
 				return type.type_kind == TK_Numeric || type.type_str == "bool" ||
 					type.type_str == "char" || type.type_str == "vector";
-			};
+				};
 			const bool logical = bin_expr_ast.op_type == OpAND || bin_expr_ast.op_type == OpOR;
 			const bool equality = bin_expr_ast.op_type == OpEQUAL || bin_expr_ast.op_type == OpNOTEQUAL;
 			const auto reference = [](const Type &type) {
 				return type.type_kind == TK_Object ||
 					type.type_str == "string" || type.type_str == "window" || type.type_kind == TK_Null;
-			};
+				};
 			if (numeric(lhs) && numeric(rhs)) {
 				if (logical && (lhs.type_str == "vector" || rhs.type_str == "vector"))
 					panic("Logical operators do not support vectors.", pc.tc);
-			} else if (!(equality && reference(lhs) && reference(rhs)))
+			}
+			else if (!(equality && reference(lhs) && reference(rhs)))
 				panic("Incompatible operand types for binary operator.", pc.tc);
 		}
 		break;
@@ -582,8 +635,10 @@ Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) con
 	case AST_StringLiteral: return find_type(pc, "string");
 	case AST_BoolLiteral: return find_type(pc, "bool");
 	case AST_Null: return find_type(pc, "null");
+	case AST_This: return pc.object_data.at(std::get<ThisAST>(node.ast).object_data).object_type;
 	case AST_Identifier: {
 		const IdentifierAST &ident = std::get<IdentifierAST>(node.ast);
+		if (ident.vector_component >= 0) return find_type(pc, "float");
 		return pc.var_data.at(ident.var_data).type;
 	}
 	case AST_FunctionCall: {

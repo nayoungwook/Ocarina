@@ -2,13 +2,13 @@
 
 #include "../renderer/framebuffer.h"
 #include <algorithm>
-#include <stdexcept>
+#include "../../ovm_panic.h"
 
 float TonicContext::delta_time() const { return elapsed; }
 
 void TonicContext::begin_frame() {
 	require_engine();
-	if (in_frame) throw std::runtime_error("Previous Tonic frame has not ended.");
+	if (in_frame) throw OVMPanic("Previous Tonic frame has not ended.");
 	scene.start_frame();
 	engine.get_renderer()->begin_frame();
 	engine.get_input()->begin_new_frame();

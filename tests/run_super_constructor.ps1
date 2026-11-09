@@ -35,8 +35,8 @@ function Invoke-Ocarina([string[]]$Commands) {
     }
 }
 
-$source = Join-Path $PSScriptRoot 'super_constructor.cn'
-$result = Invoke-Ocarina @("register $source", 'run')
+$source = Join-Path $PSScriptRoot 'super_constructor.oc'
+$result = Invoke-Ocarina @("compile $source", "register $([IO.Path]::ChangeExtension($source, '.ob'))", 'run')
 $expected = (Get-Content -LiteralPath "$PSScriptRoot\super_constructor.expected.txt" -Raw).Trim()
 if ($result.Error -or (($result.Output -replace "`r`n", "`n") -cne ($expected -replace "`r`n", "`n"))) {
     throw "Unexpected super() result:`n$($result.Output)`n$($result.Error)"
@@ -62,10 +62,10 @@ $failures = @(
     @{ Name = 'value'; Code = "$parent object Child extends Parent { constructor Child() { super(1); var x:int = super(1); } } func main():void {}"; Error = 'exactly once as the first constructor statement' }
 )
 foreach ($case in $failures) {
-    $source = Join-Path $scratch "$($case.Name).cn"
+    $source = Join-Path $scratch "$($case.Name).oc"
     Set-Content -LiteralPath $source -Value $case.Code -Encoding utf8
-    # Register only: misuse must be rejected before execution.
-    $result = Invoke-Ocarina @("register $source")
+    # Compile only: misuse must be rejected before execution.
+    $result = Invoke-Ocarina @("compile $source")
     if ($result.Error -notmatch [regex]::Escape($case.Error)) {
         throw "Expected '$($case.Error)' for $($case.Name), got: $($result.Error)"
     }

@@ -9,26 +9,40 @@ Visual Studio에서 `Ocarina.slnx`를 열고 단일 `Ocarina` 프로젝트를 x6
 SDL3, SDL3_ttf, SDL3_mixer, GLEW, GLM 등의 의존성은 `Ocarina/dependencies`에 있습니다.
 빌드 후 필요한 DLL과 셰이더를 실행 파일 옆으로 복사합니다.
 
-소스 파일을 실행 파일 옆에 두고 다음 명령을 입력합니다.
+소스 확장자는 `.oc`, Ocarina 바이트코드 확장자는 `.ob`입니다.
+셸의 파일 경로는 현재 작업 폴더를 기준으로 합니다.
+Visual Studio에서 디버그 실행할 때는 실행 파일 폴더(`x64/Debug` 또는 `x64/Release`)를 작업 폴더로 사용합니다.
+터미널에서 실행할 때는 해당 터미널의 작업 폴더가 그대로 유지됩니다.
 
 ```text
-register test.cn test2.cn
+compile test.oc test2.oc
+register test.ob
 run
-register fibo.cn
+compile fibo.oc
+register fibo.ob
 run
 quit
 ```
 
-`register`는 기존 VM 데이터를 초기화한 뒤 지정한 파일들을 하나의 컴파일 단위로 처리합니다.
-`#import "test2.cn"`는 현재 소스 파일 기준으로 읽으며 중복 등록과 순환 import를 건너뜁니다.
-등록에 실패하면 이전 프로그램도 남지 않습니다. `run`은 전역 초기화 코드와 `main`을 실행합니다.
+`compile`은 지정한 소스와 import된 소스를 함께 검사하고, 각 소스 옆에 같은 이름의 `.ob`를 생성합니다.
+`test.oc`가 `test2.oc`를 import하면 `compile test.oc`로 `test.ob`와 `test2.ob`가 생성됩니다.
+생성된 바이트가 기존 파일과 같으면 덮어쓰지 않습니다. `test.oc`만 수정하면 변경 없는 `test2.ob`의 내용과 수정 시간은 유지됩니다.
+`#import "test2.oc"`는 현재 소스 파일 기준으로 읽으며 중복 등록과 순환 import를 건너뜁니다.
+컴파일은 VM에 자동 등록하지 않으며, 컴파일 오류가 발생하면 기존 `.ob`와 등록된 프로그램을 유지합니다.
+`register`는 지정한 `.ob` 파일들로 현재 VM 프로그램을 교체합니다. 여러 파일을 함께 지정할 수 있습니다.
+각 `.ob`는 자신의 import 의존성을 기록합니다. `register test.ob`는 `test2.ob`도 자동으로 읽으며,
+의존 파일이 없으면 등록과 실행을 거부합니다. 의존 경로는 해당 `.ob`가 있는 폴더를 기준으로 해석합니다.
+파일을 다시 컴파일한 후 `register`를 다시 호출해야 VM에 갱신된 바이트코드가 반영됩니다.
+함수·객체·문자열 ID는 바이트코드에 기록된 값을 그대로 사용하며, 이름 기반 병합이나 ID 재배치는 하지 않습니다.
+함께 로딩하는 파일의 ID가 충돌하면 오류로 보고합니다.
+파일 읽기에 실패하면 이전 등록 내용을 유지합니다. `run`은 등록된 바이트코드를 로딩하고 전역 초기화 코드와 `main`을 실행합니다.
+import 의존 파일은 `run`에서도 존재 여부를 다시 확인합니다. 함수·객체·변수·문자열 ID는 함께 컴파일할 때 공유합니다.
 시작 시 별도 스레드가 셸 입력을 받고 명령 큐에 저장합니다. 메인 스레드는 명령 실행과 SDL 엔진 프레임을 처리하므로
 창이 열린 동안에도 다음 명령을 입력할 수 있습니다. `stop`은 창을 닫고 셸을 유지합니다.
-`register`와 `run`은 기존 창을 닫은 뒤 새 프로그램을 등록하거나 다시 실행합니다.
+`register`와 `run`은 기존 창을 닫은 뒤 새 프로그램을 등록하거나 다시 실행합니다. `compile`은 실행 중인 창을 유지합니다.
 창의 닫기 버튼은 창만 닫으며, `quit` 또는 EOF는 창을 정리하고 입력 스레드를 합류한 뒤 셸을 종료합니다.
 
-Ocarina 바이트코드는 `load file.cb`로 등록합니다. 여러 파일을 함께 지정할 수 있으며,
-`load`의 상대 경로는 현재 작업 폴더를 기준으로 합니다.
+셸 명령은 `compile`, `register`, `run`, `stop`, `quit`이며 `load` 명령은 제거했습니다.
 
 ## C++ API
 
@@ -37,25 +51,27 @@ Ocarina 바이트코드는 `load file.cb`로 등록합니다. 여러 파일을 �
 #include <iostream>
 
 ParserContext pc;
-pc.register_file("test.cn");
+pc.register_file("test.oc");
 pc.compile_files();
 
 IRContext irc;
 irc.gen_ir(std::move(pc));
 
-CVM vm;
+OVM vm;
 vm.register_ir("program", irc);
 vm.load_files();
 std::optional<VMOperand> result = vm.run(std::cout);
 ```
 
-`CVM`이 등록·로딩·실행을 모두 담당합니다. `clear()`는 바이트, 메타데이터, 문자열 풀과 실행 상태를 초기화합니다.
+`OVM`이 등록·로딩·실행을 모두 담당합니다. `clear()`는 바이트, 메타데이터, 문자열 풀과 실행 상태를 초기화합니다.
+기존 `std::runtime_error` 대신 `ovm_panic.h`의 `OVMPanic` 예외를 사용합니다. 컴파일 오류인 `FrontendError`도 이를 상속합니다.
+셸은 이를 `OVM Panic:` 접두사와 함께 표시하며, VM 실행 오류에는 호출 추적이 포함됩니다.
 인자 타입·지역 변수·객체 배치 정보는 모두 IR 바이트에 기록됩니다.
 `register_ir()`와 `register_bytes()`는 같은 데이터를 등록하므로 파일로 저장한 후에도 보조 정보 없이 실행할 수 있습니다.
 
 ```cpp
-CVM vm;
-vm.register_bytecode("fibo.cb");
+OVM vm;
+vm.register_bytecode("fibo.ob");
 vm.load_files();
 vm.run(std::cout);
 ```
@@ -68,6 +84,15 @@ IR은 Ocarina 단일 형식이며 API에서 형식을 선택하지 않습니다.
 
 언어 키워드는 `object`이며 함수, 생성자, 상속, 전역·지역·멤버 변수, 조건문과 반복문을 지원합니다.
 `new Object(...)`, 재귀 호출, 숫자·문자열·bool·null과 벡터 연산을 사용할 수 있습니다.
+
+벡터의 `x`, `y`, `z` 성분은 `float`이며 `v.x`, `object.position.y`처럼 읽을 수 있습니다.
+변수에 저장된 벡터의 성분에는 `=`, 복합 대입, `++`, `--`를 문장으로 사용할 수 있습니다.
+예: `v.x = 3; v.y += 2; object.position.z++;`
+`vector(1, 2, 3).x`, `make_vector().y`처럼 임시 벡터의 성분을 읽을 수 있으며, 임시 벡터의 성분에는 대입할 수 없습니다.
+
+`this`는 현재 객체 인스턴스를 참조하는 예약어입니다. 메서드·생성자·멤버 초기화 식에서 사용할 수 있습니다.
+`this.value`, `this.method()`, `return this`, 다른 함수에 `this`를 인자로 전달하는 표현을 지원합니다.
+매개변수·지역 변수와 멤버 이름이 같을 때 `this.value`로 멤버를 지정할 수 있으며, `this` 자체에는 대입할 수 없습니다.
 
 `super(...)`는 자식 생성자에서 같은 객체의 직계 부모 생성자를 실행합니다.
 부모 생성자가 있으면 자식도 생성자를 선언하고 첫 문장에서 `super(...)`를 정확히 한 번 호출해야 합니다.
@@ -97,7 +122,7 @@ GC, 개별 객체 해제와 자식 조회·분리 API는 구현하지 않습니�
 
 `ParserContext`, `TokenizerContext`, `IRContext`는 클래스입니다. AST 자식, 심볼, VM 객체 참조는 인덱스로 관리합니다.
 AST·토큰·타입·스택·hierarchy 데이터는 C++ 컨테이너가 값을 소유합니다.
-함수 프레임은 `CVM`의 컨테이너에서 처리하므로 VM 재귀 호출이 C++ 재귀 호출로 이어지지 않습니다.
+함수 프레임은 `OVM`의 컨테이너에서 처리하므로 VM 재귀 호출이 C++ 재귀 호출로 이어지지 않습니다.
 현재 호출 깊이는 512단계, 프레임 총 크기는 1 MiB, 피연산자 스택은 262,144개로 제한합니다.
 null 접근, hierarchy 순환 관계, 0으로 나누기와 스택 오류는 예외로 보고합니다.
 
@@ -114,8 +139,11 @@ load/save의 암시적 변환에 의존하던 기존 `.cb` 파일은 소스에�
 메모리 배치·변환·컴파일 시 타입 검사 회귀 검사는 `powershell -File tests/run_memory_storage.ps1`로 실행합니다.
 부모 생성자 호출과 컴파일 시 사용 규칙 검사는 `powershell -File tests/run_super_constructor.ps1`로 실행합니다.
 객체 연결과 제거된 배열 문법 검사는 `powershell -File tests/run_hierarchy.ps1`로 실행합니다.
+`this` 참조·멤버 접근·상속·컴파일 시 사용 규칙 검사는 `powershell -File tests/run_this.ps1`로 실행합니다.
 창이 열린 동안의 셸 입력·재실행·종료 검사는 `powershell -File tests/run_shell_engine.ps1`로 실행합니다.
 이 검사는 실제 SDL 창을 잠시 열었다가 닫습니다.
+바이트코드 파일 생성·독립 실행·재등록과 셸 명령 검사는 `powershell -File tests/run_bytecode_shell.ps1`로 실행합니다.
+파일별 출력·변경 없는 의존 파일 유지·중첩 import·의존 파일 누락 검사는 `powershell -File tests/run_split_compilation.ps1`로 실행합니다.
 
 ## 내장 함수와 엔진
 
@@ -128,8 +156,8 @@ load/save의 암시적 변환에 의존하던 기존 `.cb` 파일은 소스에�
 내장 함수는 일반 함수 목록과 분리한 `syscall_smtb`에 등록합니다. `sys_gc`는 포함하지 않습니다.
 `window()`로 만든 창은 스크립트의 `main` 실행 후 셸의 엔진 루프에서 갱신합니다.
 SDL 창 생성·이벤트·렌더링과 VM 명령 실행은 메인 스레드에서 처리하며, 셸 입력은 별도 스레드에서 받습니다.
-임베딩 API의 `CVM::run(out)`은 기존처럼 창이 닫힐 때까지 실행합니다.
-`CVM::run(out, CVM::RunMode::ReturnAfterMain)`은 창을 유지한 채 반환하므로 호출자가 `engine.run_frame()`과 종료 처리를 담당합니다.
+임베딩 API의 `OVM::run(out)`은 기존처럼 창이 닫힐 때까지 실행합니다.
+`OVM::run(out, OVM::RunMode::ReturnAfterMain)`은 창을 유지한 채 반환하므로 호출자가 `engine.run_frame()`과 종료 처리를 담당합니다.
 
 Tonic 엔진의 C++ API는 `tonic_context.h`의 `TonicContext`로 사용합니다.
 창·프레임, 도형·텍스처·텍스트 그리기, 입력, 카메라와 오디오를 지원합니다.
@@ -146,9 +174,9 @@ Tonic 엔진의 C++ API는 `tonic_context.h`의 `TonicContext`로 사용합니�
 | `type.cpp` | 타입 생성과 조회 |
 | `semantics.cpp`, `syscall_semantics.cpp` | 심볼·타입·호출 검사 |
 | `ir.cpp` | IR 생성 |
-| `code_data.cpp`, `ir_load.cpp` | VM 데이터와 실제 IR 로딩 |
+| `code_data.cpp`, `ir_load.cpp` | VM 데이터와 IR 로딩 |
 | `vm.cpp`, `vm_execute.cpp`, `vm_instruction.cpp` | 등록과 실행 |
 | `vm_memory.cpp`, `vm_numeric.cpp`, `vm_syscall.cpp` | 메모리·연산·내장 함수 |
 | `vm_hierarchy.cpp` | 객체 저장과 부모·자식 연결 |
 | `util.cpp` | 파일 읽기·쓰기 |
-| `main.cpp` | 명령 셸 |
+| `main.cpp`, `shell_commands.cpp` | 명령 셸과 컴파일·바이트코드 등록 |

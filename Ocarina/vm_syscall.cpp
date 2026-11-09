@@ -5,7 +5,7 @@
 
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 static float numeric_operand_to_float(const VMOperand &operand) {
 	switch (operand.op_type) {
@@ -21,16 +21,16 @@ static float numeric_operand_to_float(const VMOperand &operand) {
 		return static_cast<float>(operand.val.f64);
 
 	default:
-		throw std::runtime_error("vector components must be numeric.");
+		throw OVMPanic("vector components must be numeric.");
 	}
 }
 
-SyscallContext::SyscallContext(CVM &vm) : vm(vm) {
+SyscallContext::SyscallContext(OVM &vm) : vm(vm) {
 }
 
 void SyscallContext::print(std::span<const VMOperand> arguments,
-						   const VMStringPool &vm_string_pool,
-						   std::ostream &out) const {
+	const VMStringPool &vm_string_pool,
+	std::ostream &out) const {
 	std::ostringstream text;
 
 	for (const VMOperand &op : arguments) {
@@ -81,7 +81,7 @@ void SyscallContext::print(std::span<const VMOperand> arguments,
 
 VMOperand SyscallContext::vector(std::span<const VMOperand> arguments) const {
 	if (arguments.size() > 3)
-		throw std::runtime_error("vector accepts at most three components.");
+		throw OVMPanic("vector accepts at most three components.");
 
 	VMOperand result;
 	result.op_type = VMOPType::OPRND_VEC;
@@ -94,11 +94,11 @@ VMOperand SyscallContext::vector(std::span<const VMOperand> arguments) const {
 }
 
 VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
-								 const VMStringPool &vm_string_pool) {
+	const VMStringPool &vm_string_pool) {
 	if (arguments.size() != 3 || arguments[0].op_type != VMOPType::OPRND_String ||
 		arguments[1].op_type != VMOPType::OPRND_INT32 ||
 		arguments[2].op_type != VMOPType::OPRND_INT32)
-		throw std::runtime_error("window expects (string, int, int).");
+		throw OVMPanic("window expects (string, int, int).");
 
 	VMOperand result;
 	result.op_type = VMOPType::OPRND_ADDRESS;
@@ -115,9 +115,9 @@ VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
 }
 
 std::optional<VMOperand> SyscallContext::handle_syscall(unsigned id,
-														std::span<const VMOperand> arguments,
-														const VMStringPool &vm_string_pool,
-														std::ostream &out) {
+	std::span<const VMOperand> arguments,
+	const VMStringPool &vm_string_pool,
+	std::ostream &out) {
 	switch (id) {
 	case 0:
 		print(arguments, vm_string_pool, out);
@@ -130,6 +130,6 @@ std::optional<VMOperand> SyscallContext::handle_syscall(unsigned id,
 		return window(arguments, vm_string_pool);
 
 	default:
-		throw std::runtime_error("Unknown syscall ID: " + std::to_string(id));
+		throw OVMPanic("Unknown syscall ID: " + std::to_string(id));
 	}
 }

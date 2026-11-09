@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <limits>
-#include <stdexcept>
+#include "ovm_panic.h"
 
 void VMHierarchy::reset() {
 	objects.clear();
@@ -11,7 +11,8 @@ void VMHierarchy::reset() {
 
 unsigned VMHierarchy::store(VMHierarchyObject object) {
 	if (objects.size() >= static_cast<std::size_t>(std::numeric_limits<std::int32_t>::max()))
-		throw std::runtime_error("Too many hierarchy objects.");
+		throw OVMPanic("Too many hierarchy objects.");
+
 	const unsigned index = static_cast<unsigned>(objects.size());
 
 	auto &roots = objects.front().children;
@@ -26,10 +27,10 @@ unsigned VMHierarchy::store(VMHierarchyObject object) {
 
 void VMHierarchy::add_child(unsigned parent, unsigned child) {
 	if (parent == 0 || child == 0 || parent >= objects.size() || child >= objects.size())
-		throw std::runtime_error("Invalid or null object reference.");
+		throw OVMPanic("Invalid or null object reference.");
 	for (unsigned ancestor = parent; ancestor != 0; ancestor = objects[ancestor].parent)
 		if (ancestor == child)
-			throw std::runtime_error("add_child would create a hierarchy cycle.");
+			throw OVMPanic("add_child would create a hierarchy cycle.");
 	VMHierarchyObject &node = objects[child];
 	if (node.parent == parent)
 		return;

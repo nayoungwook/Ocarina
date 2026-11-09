@@ -20,6 +20,7 @@
 ipch/
 
 # Compiler intermediate files
+*.ob
 *.obj
 *.pch
 *.ipch

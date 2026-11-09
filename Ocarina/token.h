@@ -75,6 +75,7 @@ enum class TokenType {
 	TokNull,
 	TokMod,
 	TokModAssign,
+	TokThis,
 };
 
 struct SourceLocation {

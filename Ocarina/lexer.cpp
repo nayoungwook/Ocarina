@@ -28,6 +28,7 @@ void TokenizerContext::init_keyword() {
 	insert_keyword("true", TokenType::TokTrue);
 	insert_keyword("false", TokenType::TokFalse);
 	insert_keyword("null", TokenType::TokNull);
+	insert_keyword("this", TokenType::TokThis);
 }
 
 TokenizerContext::TokenizerContext(std::string_view file, const std::string &source_name) {
@@ -44,7 +45,10 @@ TokenizerContext::TokenizerContext(std::string_view file, const std::string &sou
 void TokenizerContext::init_tc() {
 	TokenizerContext &tc = *this;
 	tc.cur_ch = tc.begin_ch;
+
+	// skipping BOM.
 	if (tc.file.compare(0, 3, "\xEF\xBB\xBF") == 0) tc.cur_ch += 3;
+
 	tc.line_begin = tc.cur_ch;
 	tc.token_cache.reset();
 	tc.line_num = 1;
@@ -58,17 +62,19 @@ SourceLocation TokenizerContext::get_source_location() const {
 
 char TokenizerContext::next_ch() {
 	char ch = current_ch();
-        if (cur_ch >= file.size()) panic("Unexpected end of input.", *this);
+	if (cur_ch >= file.size()) panic("Unexpected end of input.", *this);
+
 	cur_ch++;
 	if (ch == '\n') {
 		line_num++;
 		line_begin = cur_ch;
 	}
+
 	return ch;
 }
 
 char TokenizerContext::current_ch(std::size_t ahead) const {
-        return cur_ch < file.size() && ahead < file.size() - cur_ch ? file[cur_ch + ahead] : '\0';
+	return cur_ch < file.size() && ahead < file.size() - cur_ch ? file[cur_ch + ahead] : '\0';
 }
 
 bool TokenizerContext::is_digit(char ch) {
@@ -98,13 +104,17 @@ struct Token TokenizerContext::gen_num_token() {
 	TokenizerContext &tc = *this;
 	SourceLocation location = get_source_location();
 	std::string str;
+
 	while (is_digit(current_ch())) str += next_ch();
+
 	if (current_ch() == '.') {
 		str += next_ch();
 		while (is_digit(current_ch())) str += next_ch();
 	}
+
 	if (current_ch() == 'f') str += next_ch();
 	if (is_ident(current_ch()) || current_ch() == '.') panic("Invalid numeric type.", tc);
+
 	return gen_token(TokenType::TokNumberLiteral, std::move(str), location);
 }
 
@@ -118,6 +128,7 @@ struct Token TokenizerContext::gen_ident_token() {
 	SourceLocation location = get_source_location();
 	std::string str;
 	while (is_ident(current_ch())) str += next_ch();
+
 	TokenType type = check_ident_type(str);
 	return gen_token(type, std::move(str), location);
 }
@@ -129,6 +140,7 @@ void TokenizerContext::get_str_literal(std::string &str, char quote) {
 		char ch = current_ch();
 		if (ch == '\0' || ch == '\n' || ch == '\r') panic("Unterminated literal.", tc);
 		str += next_ch();
+
 		if (ch == '\\') {
 			ch = current_ch();
 			if (ch != 'n' && ch != 'r' && ch != 't' && ch != '0' &&
@@ -209,12 +221,15 @@ struct Token TokenizerContext::pull() {
 		tc.token_cache.reset();
 		return result;
 	}
+
+	// comments and whitespaces.
 	for (;;) {
-		while (std::isspace(static_cast<unsigned char>(current_ch()))) next_ch();
-		if (current_ch() == '/' && current_ch(1) == '/') {
+		while (std::isspace(static_cast<unsigned char>(current_ch()))) next_ch(); // skipping white spaces.
+
+		if (current_ch() == '/' && current_ch(1) == '/') { // comments
 			while (current_ch() != '\0' && current_ch() != '\n') next_ch();
 		}
-		else if (current_ch() == '/' && current_ch(1) == '*') {
+		else if (current_ch() == '/' && current_ch(1) == '*') { // multi line comments.
 			next_ch(); next_ch();
 			while (!(current_ch() == '*' && current_ch(1) == '/')) {
 				if (current_ch() == '\0') panic("Unterminated comment.", tc);
@@ -224,18 +239,27 @@ struct Token TokenizerContext::pull() {
 		}
 		else break;
 	}
-	if (std::isalpha(static_cast<unsigned char>(current_ch())) || current_ch() == '_') return gen_ident_token();
-	if (is_sc(current_ch())) return gen_sc_token();
-	if (is_digit(current_ch())) return gen_num_token();
-	if (current_ch() != '\0') panic("Unexpected character.", tc);
-	struct Token eof_token = gen_token(TokenType::TokEOF, "EOF", get_source_location());
+
+	// real token shits.
+	if (std::isalpha(static_cast<unsigned char>(current_ch())) || current_ch() == '_') return gen_ident_token(); // identifier
+
+	if (is_sc(current_ch())) return gen_sc_token(); // special character
+
+	if (is_digit(current_ch())) return gen_num_token(); // digits
+
+	if (current_ch() != '\0') panic("Unexpected character.", tc); // unexpected character
+
+	struct Token eof_token = gen_token(TokenType::TokEOF, "EOF", get_source_location()); // eof
+
 	return eof_token;
 }
 
 struct Token TokenizerContext::consume(TokenType tt) {
 	TokenizerContext &tc = *this;
 	struct Token tok = peek();
+
 	if (tok.type != tt) panic("Wrong token type consumed.", tc);
+
 	return pull();
 }
 

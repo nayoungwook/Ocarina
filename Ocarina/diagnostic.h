@@ -2,13 +2,13 @@
 
 #include "token.h"
 
-#include <stdexcept>
+#include "ovm_panic.h"
 
-class FrontendError : public std::runtime_error {
+class FrontendError : public OVMPanic {
 public:
 	FrontendError(const std::string &source, SourceLocation location,
 		const std::string &message)
-		: std::runtime_error(source + ":" + std::to_string(location.line) + ":" +
+		: OVMPanic(source + ":" + std::to_string(location.line) + ":" +
 			std::to_string(location.column) + ": " + message),
 		location(location) {
 	}

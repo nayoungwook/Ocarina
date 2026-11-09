@@ -56,7 +56,6 @@ struct VMVariableData {
 struct VMObjectData {
 	unsigned id = 0, parent_id = 0, size = 0;
 	std::string name;
-	bool parent_resolved = false;
 	VMFunctionData initializer;
 	std::map<unsigned, VMFunctionData> function_data;
 	std::map<unsigned, VMVariableData> variable_data;

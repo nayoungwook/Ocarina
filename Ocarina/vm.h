@@ -1,6 +1,7 @@
 #pragma once
 
 #include "code_data.h"
+#include "ovm_panic.h"
 #include "vm_syscall.h"
 #include "vm_memory.h"
 
@@ -11,7 +12,7 @@
 #include "ir.h"
 #include "engine/engine.h"
 
-class CVM {
+class OVM {
 public:
 	enum class RunMode { WaitForWindow, ReturnAfterMain };
 

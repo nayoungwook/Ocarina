@@ -35,8 +35,8 @@ function Invoke-Ocarina([string[]]$Commands) {
     }
 }
 
-$source = Join-Path $PSScriptRoot 'memory_storage.cn'
-$result = Invoke-Ocarina @("register $source", 'run', 'run')
+$source = Join-Path $PSScriptRoot 'memory_storage.oc'
+$result = Invoke-Ocarina @("compile $source", "register $([IO.Path]::ChangeExtension($source, '.ob'))", 'run', 'run')
 $expected = (Get-Content -LiteralPath "$PSScriptRoot\memory_storage.expected.txt" -Raw).Trim()
 $actual = (($result.Output -replace "`r`n", "`n") -split "`n" | Where-Object { $_ -ne '' }) -join "`n"
 $expected = (($expected -replace "`r`n", "`n"), ($expected -replace "`r`n", "`n")) -join "`n"
@@ -56,10 +56,10 @@ $failures = @(
     @{ Name = 'expression'; Code = 'func main():void { var x:int = "bad" + 1; }' }
 )
 foreach ($case in $failures) {
-    $source = Join-Path $scratch "$($case.Name).cn"
+    $source = Join-Path $scratch "$($case.Name).oc"
     Set-Content -LiteralPath $source -Value $case.Code -Encoding utf8
     # Do not execute: incompatible values must fail during compilation.
-    $result = Invoke-Ocarina @("register $source")
+    $result = Invoke-Ocarina @("compile $source")
     if ($result.Error -notmatch 'Incompatible (value|operand) types?') {
         throw "Expected compile-time type rejection for $($case.Name), got: $($result.Error)"
     }

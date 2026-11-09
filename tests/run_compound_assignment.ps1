@@ -18,7 +18,8 @@ function Invoke-Ocarina([string]$Source) {
     $info.RedirectStandardError = $true
     $process = [Diagnostics.Process]::Start($info)
     try {
-        $process.StandardInput.WriteLine("register $Source")
+        $process.StandardInput.WriteLine("compile $Source")
+        $process.StandardInput.WriteLine("register $([IO.Path]::ChangeExtension($Source, '.ob'))")
         $process.StandardInput.WriteLine('run')
         $process.StandardInput.WriteLine('quit')
         $process.StandardInput.Close()
@@ -37,7 +38,7 @@ function Invoke-Ocarina([string]$Source) {
     }
 }
 
-$result = Invoke-Ocarina 'tests/compound_assignment.cn'
+$result = Invoke-Ocarina 'tests/compound_assignment.oc'
 $expected = (Get-Content -LiteralPath "$PSScriptRoot\compound_assignment.expected.txt" -Raw).Trim()
 if ($result.Error -or (($result.Output -replace "`r`n", "`n") -cne ($expected -replace "`r`n", "`n"))) {
     throw "Unexpected result:`n$($result.Output)`n$($result.Error)"
@@ -56,7 +57,7 @@ $failures = @(
     @{ Name = 'null'; Body = 'var a:Value = null; a.value += 1;'; Error = 'Invalid or null object reference' }
 )
 foreach ($case in $failures) {
-    $source = "build-vs/compound-assignment-tests/$($case.Name).cn"
+    $source = "build-vs/compound-assignment-tests/$($case.Name).oc"
     Set-Content -LiteralPath (Join-Path $repo $source) -Value "object Value { var value:int; } func main():void { $($case.Body) }" -Encoding utf8
     $result = Invoke-Ocarina $source
     if ($result.Error -notmatch [regex]::Escape($case.Error)) {

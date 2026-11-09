@@ -35,8 +35,8 @@ function Invoke-Ocarina([string[]]$Commands) {
     }
 }
 
-$source = Join-Path $PSScriptRoot 'hierarchy.cn'
-$result = Invoke-Ocarina @("register $source", 'run', 'run')
+$source = Join-Path $PSScriptRoot 'hierarchy.oc'
+$result = Invoke-Ocarina @("compile $source", "register $([IO.Path]::ChangeExtension($source, '.ob'))", 'run', 'run')
 $expected = (Get-Content -LiteralPath "$PSScriptRoot\hierarchy.expected.txt" -Raw).Trim() -replace "`r`n", "`n"
 $actual = (($result.Output -replace "`r`n", "`n") -split "`n" | Where-Object { $_ -ne '' }) -join "`n"
 if ($result.Error -or $actual -cne (@($expected, $expected) -join "`n")) {
@@ -61,9 +61,9 @@ $compileFailures = @(
     @{ Name = 'old_length'; Body = 'var a:A = new A(); print(a.length);'; Error = 'Unknown member variable' }
 )
 foreach ($case in $compileFailures) {
-    $source = Join-Path $scratch "$($case.Name).cn"
+    $source = Join-Path $scratch "$($case.Name).oc"
     Set-Content -LiteralPath $source -Value "object A {} object B {} func main():void { $($case.Body) }" -Encoding utf8
-    $result = Invoke-Ocarina @("register $source")
+    $result = Invoke-Ocarina @("compile $source")
     if ($result.Error -notmatch $case.Error) {
         throw "Expected compile-time '$($case.Error)' for $($case.Name), got: $($result.Error)"
     }
@@ -78,9 +78,9 @@ $runtimeFailures = @(
     @{ Name = 'null_parent'; Body = 'var a:A = null; a.add_child(new A());'; Error = 'Invalid or null object reference' }
 )
 foreach ($case in $runtimeFailures) {
-    $source = Join-Path $scratch "$($case.Name).cn"
+    $source = Join-Path $scratch "$($case.Name).oc"
     Set-Content -LiteralPath $source -Value "object A {} func main():void { $($case.Body) }" -Encoding utf8
-    $result = Invoke-Ocarina @("register $source", 'run')
+    $result = Invoke-Ocarina @("compile $source", "register $([IO.Path]::ChangeExtension($source, '.ob'))", 'run')
     if ($result.Error -notmatch [regex]::Escape($case.Error)) {
         throw "Expected '$($case.Error)' for $($case.Name), got: $($result.Error)"
     }
