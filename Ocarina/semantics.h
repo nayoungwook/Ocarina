@@ -7,6 +7,7 @@ public:
 	void resolve_semantics(ParserContext &pc);
 	Type infer_type(const ParserContext &pc, const Node &node) const;
 	Type infer_operation_type(const ParserContext &pc, const Type &lhs, const Type &rhs) const;
+	Type get_return_type_of_attr_syscall(const ParserContext &pc, AttrSyscallType attr_syscall) const;
 
 private:
 	std::vector<Scope> scopes;
@@ -33,13 +34,17 @@ private:
 	std::size_t find_member_func_data(const ParserContext &pc, std::size_t attr_of, const std::string &key) const;
 	void check_semantics(ParserContext &pc, Node &node);
 	std::size_t bind_super_call(ParserContext &pc, const Node &node) const;
+	void bind_super_method(ParserContext &pc, FuncCallAST &call) const;
 	void check_value(ParserContext &pc, Node &node, const Type &expected);
 	void bind_add_child(ParserContext &pc, Node &node, FuncCallAST &call);
+	void bind_get_child(ParserContext &pc, Node &node, FuncCallAST &call);
+	void bind_child_size(ParserContext &pc, Node &node, FuncCallAST &call);
 	void check_child(ParserContext &pc, NodeId id);
 	void check_syscall(ParserContext &pc, const FuncCallAST &func_call_ast);
 	void check_semantics_body(ParserContext &pc, std::vector<Node> &body);
 	void check_function(ParserContext &pc, NodeId params, std::vector<Node> &body,
 		std::size_t func_id, std::vector<std::size_t> &declared_vars);
+	bool check_attr_syscall(ParserContext &pc, FuncCallAST &func_call_ast, Node &node);
 	void register_attr_data(ParserContext &pc, std::size_t attr_of, Node &node);
 	void resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node);
 };

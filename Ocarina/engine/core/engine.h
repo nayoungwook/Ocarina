@@ -24,10 +24,11 @@ class ShaderManager;
 class Scene;
 class Input;
 class FrameBuffer;
+class OVM;
 
 class Engine {
       public:
-        Engine() = default;
+        explicit Engine(OVM *vm = nullptr) : vm(vm) {}
         ~Engine();
         Engine(const Engine &) = delete;
         Engine &operator=(const Engine &) = delete;
@@ -59,6 +60,9 @@ class Engine {
         // Run one frame on the SDL/main thread. False means closed or inactive.
         bool run_frame();
 
+        void update_hierarchy();
+        void render_hierarchy();
+
         void init_window(const std::string &title, int width, int height);
         void init_engine();
 
@@ -73,6 +77,7 @@ class Engine {
         FrameBuffer *current_framebuffer = nullptr;
         Scene *current_scene = nullptr;
 		std::function<void(Engine *)> after_scene_update;
+        OVM *vm = nullptr;
         Display *display = nullptr;
         Camera *camera = nullptr;
         Renderer *renderer = nullptr;

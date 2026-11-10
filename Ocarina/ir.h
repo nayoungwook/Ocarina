@@ -125,9 +125,11 @@
 #define OP_DUP 0x9c // duplicate the top count(uint) operands in order
 #define OP_CONVERT 0x9d // convert top operand to compiler-selected VMOPType(uint)
 #define OP_ADD_CHILD 0x9e // receiver(uint): 0=current object, 1=operand stack
-#define OP_LOAD_THIS 0x9f // push the current receiver reference
-#define OP_VECTOR_COMPONENT 0xa0 // extract component(uint) from a vector value
-#define OP_SAVE_VECTOR_COMPONENT 0xa1 // storage(uint), vector offset(uint), component(uint)
+#define OP_GET_CHILD 0x9f // receiver(uint): 0=current object, 1=operand stack
+#define OP_CHILD_SIZE 0xa0 // receiver(uint): 0=current object, 1=operand stack
+#define OP_LOAD_THIS 0xa1 // push the current receiver reference
+#define OP_VECTOR_COMPONENT 0xa2 // extract component(uint) from a vector value
+#define OP_SAVE_VECTOR_COMPONENT 0xa3 // storage(uint), vector offset(uint), component(uint)
 
 enum class VectorStorage : unsigned { Local, Global, Object, Attribute };
 

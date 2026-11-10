@@ -16,7 +16,7 @@ enum ScopeData {
 struct FuncData {
 	unsigned id = {};
 	std::size_t symbol_id = NoNode;
-	std::size_t object_data = NoNode;
+	std::size_t owner_object_index = NoNode;
 	std::string func_name;
 	struct Type return_type = {};
 
@@ -24,6 +24,7 @@ struct FuncData {
 	unsigned arg_count = {};
 
 	bool is_constructor = false;
+	bool is_builtin = false;
 
 	bool varargs = false;
 
@@ -146,6 +147,7 @@ private:
 	struct Node gen_ret_node(const struct Token &first);
 	struct Node gen_object_decl_node(const struct Token &first);
 	struct Node gen_new_node(const struct Token &first);
+	Node gen_cast_node();
 	static bool is_number_literal_integer(const std::string &num_lit_str);
 	static short get_number_literal_byte(const std::string &num_lit_str);
 	struct Type find_numeric_type(unsigned nbyte, bool is_integer, bool is_signed);

@@ -32,6 +32,8 @@ public:
 	void reset();
 	unsigned store(VMHierarchyObject object);
 	void add_child(unsigned parent, unsigned child);
+	unsigned get_child(unsigned parent, std::int32_t index) const;
+	unsigned get_child_size(unsigned parent) const;
 	VMHierarchyObject &at(unsigned index) { return objects.at(index); }
 	const VMHierarchyObject &at(unsigned index) const { return objects.at(index); }
 	std::size_t size() const { return objects.size(); }

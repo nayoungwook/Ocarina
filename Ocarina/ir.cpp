@@ -96,6 +96,10 @@ void IRContext::gen_object_metadata(const ObjectAST &object_ast) {
 		: pc.object_data.at(cd.parent_type.data.object_data).id);
 	emit_int(cd.instance_size);
 
+	for (const auto &[name, function] : cd.member_funcs)
+		if (function.is_builtin)
+			gen_func_metadata(function, {});
+
 	for (const Node &node : object_ast.body) {
 		if (node.type == AST_FunctionDeclaration) {
 			const FuncDeclAST &func = std::get<FuncDeclAST>(node.ast);
@@ -382,7 +386,7 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 }
 
 void IRContext::gen_zero(const Type &type) {
-	if (type.type_kind == TK_Object ||
+	if (is_object_reference(type) ||
 		type.type_str == "string" || type.type_str == "window")
 		emit_byte(OP_PUSH_NULL);
 	else if (type.type_str == "float") {
@@ -498,6 +502,13 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 	case AST_Identifier:
 		gen_ident_ir(node, value_required);
 		break;
+	case AST_Cast: {
+		const CastAST &cast = std::get<CastAST>(node.ast);
+		gen_value_ir(pc.get_node(cast.expr), cast.target_type);
+		if (node.attr != NoNode)
+			gen_child_ir(node.attr, value_required);
+		break;
+	}
 	case AST_This:
 		emit_byte(OP_LOAD_THIS);
 		if (node.attr != NoNode)
@@ -559,6 +570,7 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			const IdentifierAST target = gen_assignment_target(left);
 			const VarData &var_data = pc.var_data.at(target.var_data);
 			const Type type = target.vector_component >= 0 ? find_type(pc, "float") : var_data.type;
+			
 			if (compound) {
 				if (target.is_attr) {
 					// Keep the evaluated receiver for the store.
@@ -567,7 +579,9 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 				}
 				gen_target_load_ir(target);
 			}
+
 			gen_child_ir(bin_expr_ast.right);
+			
 			if (compound) {
 				emit_byte(OP_EXPR_OP);
 				emit_byte(get_op_byte(bin_expr_ast.op_type));
@@ -576,7 +590,9 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			}
 			else
 				gen_conversion(semantics.infer_type(pc, pc.get_node(bin_expr_ast.right)), type);
+			
 			gen_target_save_ir(target);
+			
 			if (value_required)
 				gen_ident_load_ir(var_data, false);
 		}
@@ -629,14 +645,30 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		break;
 	case AST_FunctionCall: {
 		const FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
-		if (func_call_ast.is_add_child) {
+
+		switch (func_call_ast.attr_syscall_type) {
+		case AttrSyscallType::ATTR_SYSCALL_ADD_CHILD:
 			if (value_required)
 				panic("add_child has no return value.", pc.tc);
 			gen_node_ir(func_call_ast.params.front(), true);
 			emit_byte(OP_ADD_CHILD);
 			emit_int(func_call_ast.is_attr ? 1 : 0);
-			break;
+			return;
+		case AttrSyscallType::ATTR_SYSCALL_GET_CHILD:
+			gen_value_ir(func_call_ast.params.front(), find_type(pc, "int"));
+			emit_byte(OP_GET_CHILD);
+			emit_int(func_call_ast.is_attr ? 1 : 0);
+			if (node.attr != NoNode)
+				gen_child_ir(node.attr, value_required);
+			return;
+		case AttrSyscallType::ATTR_SYSCALL_CHILD_SIZE:
+			emit_byte(OP_CHILD_SIZE);
+			emit_int(func_call_ast.is_attr ? 1 : 0);
+			if (node.attr != NoNode)
+				gen_child_ir(node.attr, value_required);
+			return;
 		}
+
 		const FuncData &func_data = pc.get_func_data(func_call_ast);
 
 		if (value_required && node.attr == NoNode && func_data.return_type.type_str == "void")
@@ -650,9 +682,13 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		}
 
 		if (func_call_ast.super_object != NoNode) {
-			emit_byte(OP_CALL_SUPER);
+			emit_byte(func_call_ast.is_super_method ? OP_CALL_SUPER_METHOD : OP_CALL_SUPER);
 			emit_int(pc.object_data.at(func_call_ast.super_object).id);
+			if (func_call_ast.is_super_method)
+				emit_int(func_data.id);
 			emit_int(static_cast<unsigned>(func_call_ast.params.size()));
+			if (node.attr != NoNode)
+				gen_child_ir(node.attr, value_required);
 			break;
 		}
 
@@ -676,6 +712,9 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 		current_object = object_ast.object_data;
 		emit_byte(CODE_OBJECT);
 		emit_int(pc.object_data.at(current_object).id);
+		for (const auto &[name, function] : pc.object_data.at(current_object).member_funcs)
+			if (function.is_builtin)
+				gen_function_ir(function, {}, {});
 		for (const Node &member : object_ast.body)
 			gen_node_ir(member);
 		emit_byte(CODE_TERM);

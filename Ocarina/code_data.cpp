@@ -17,6 +17,8 @@ int vm_instruction_operand_count(std::uint8_t opcode) {
 	case OP_DUP:
 	case OP_CONVERT:
 	case OP_ADD_CHILD:
+	case OP_GET_CHILD:
+	case OP_CHILD_SIZE:
 	case OP_VECTOR_COMPONENT:
 		return 1;
 	case OP_SP_LOAD:
@@ -45,6 +47,7 @@ int vm_instruction_operand_count(std::uint8_t opcode) {
 	case OP_NEW_OBJECT:
 		return 4;
 	case OP_SAVE_VECTOR_COMPONENT:
+	case OP_CALL_SUPER_METHOD:
 		return 3;
 	case OP_RET:
 	case OP_RET_VAL:

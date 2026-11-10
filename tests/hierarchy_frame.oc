@@ -1,0 +1,89 @@
+var reports:int = 0;
+
+object Empty {}
+
+object Actor {
+    var label:int;
+    var ticks:int = 0;
+    var reported:bool = false;
+
+    constructor Actor(label:int) { this.label = label; }
+
+    func activate():void { ticks = 1; }
+
+    func update():void {
+        if (ticks == 0) { activate(); }
+    }
+
+    func render():void {
+        if (ticks == 1 && !reported) {
+            print("ACTOR:", label, "\n");
+            reported = true;
+            reports++;
+        }
+    }
+}
+
+object Inherited extends Actor {
+    constructor Inherited() { super(20); }
+    func update():void { super.update(); }
+    func render():void { super.render(); }
+}
+
+object Overridden extends Actor {
+    constructor Overridden() { super(30); }
+
+    func update():void {
+        if (ticks == 0) { ticks = 2; }
+    }
+
+    func render():void {
+        if (ticks == 2 && !reported) {
+            print("OVERRIDE:", label, "\n");
+            reported = true;
+            reports++;
+        }
+    }
+}
+
+object Spawner extends Actor {
+    var target:Actor;
+    constructor Spawner(target:Actor) {
+        super(40);
+        this.target = target;
+    }
+
+    func update():void {
+        if (ticks == 0) {
+            add_child(target);
+            var spawned:Actor = new Actor(50);
+            add_child(spawned);
+            ticks = 1;
+        }
+    }
+    func render():void { super.render(); }
+}
+
+object Monitor {
+    var done:bool = false;
+    func update():void {
+        if (reports == 5 && !done) {
+            print("HIERARCHY_FRAME_DONE\n");
+            done = true;
+        }
+    }
+}
+
+func main():void {
+    var empty:Empty = new Empty();
+    empty.update();
+    empty.render();
+    var actor:Actor = new Actor(10);
+    var inherited:Inherited = new Inherited();
+    var overridden:Overridden = new Overridden();
+    actor.add_child(inherited);
+    inherited.add_child(overridden);
+    var spawner:Spawner = new Spawner(actor);
+    var monitor:Monitor = new Monitor();
+    var win:window = window("Hierarchy frame test", 320, 240);
+}

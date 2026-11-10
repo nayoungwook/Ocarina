@@ -123,9 +123,9 @@ std::optional<VMOperand> OVM::finish_frame() {
 	return result;
 }
 
-std::optional<VMOperand> OVM::vm_exec_function(const VMFunctionData &function_data) {
-	push_frame(function_data);
-
+std::optional<VMOperand> OVM::vm_exec_function(const VMFunctionData &function_data,
+	unsigned hierarchy_index) {
+	push_frame(function_data, {}, hierarchy_index);
 	try {
 		while (!frames.empty()) {
 			VMFrame &frame = frames.back();
@@ -163,14 +163,13 @@ std::optional<VMOperand> OVM::vm_exec_function(const VMFunctionData &function_da
 }
 
 std::optional<VMOperand> OVM::run(std::ostream &out, RunMode mode) {
-	if (syscalls)
+	if (!frames.empty())
 		throw OVMPanic("This OVM is already running.");
 	clear_execution();
 
-	SyscallContext context(*this);
-	syscalls = std::ref(context);
+	syscalls.emplace(*this);
 	output = std::ref(out);
-
+	
 	try {
 		unsigned global_size = 0;
 		for (const auto &[id, variable] : variable_data)
@@ -184,13 +183,17 @@ std::optional<VMOperand> OVM::run(std::ostream &out, RunMode mode) {
 
 		if (initializer.code_loaded)
 			vm_exec_function(initializer);
+
 		const auto result = vm_exec_function(entry->second);
+
 		if (mode == RunMode::WaitForWindow) {
 			if (engine.get_display() != nullptr)
 				engine.start();
 			engine.shutdown();
 		}
-		clear_execution();
+
+		if (mode == RunMode::WaitForWindow || engine.get_display() == nullptr)
+			clear_execution();
 		return result;
 	}
 	catch (...) {

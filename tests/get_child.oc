@@ -1,0 +1,55 @@
+object Item { var value:int = 10; }
+object Other { var value:int = 20; }
+
+object Group {
+    func first():object { return get_child(0); }
+    func attach(child:object):void { add_child(child); }
+}
+
+object DerivedGroup extends Group {}
+object Holder { var saved:object; }
+
+var root:Group = new DerivedGroup();
+var global_handle:object;
+var receiver_calls:int = 0;
+var index_calls:int = 0;
+
+func receiver():Group { receiver_calls++; return root; }
+func index():double { index_calls++; return 0.9; }
+func identity(value:object):object { return value; }
+
+func main():void {
+    var local_handle:object;
+    var holder:Holder = new Holder();
+    print("nulls:", global_handle == null, ",", local_handle == null, ",", holder.saved == null, "\n");
+    var item:Item = new Item();
+    var other:Other = new Other();
+    root.add_child(item);
+    root.add_child(other);
+    root.add_child(item);
+    print("order:", root.get_child(0) == item, ",", root.get_child(1) == other, "\n");
+    print("implicit:", root.first() == item, "\n");
+    cast<Item>(root.get_child(0)).value = 15;
+    holder.saved = root.get_child(1);
+    print("casts:", cast<Item>(root.get_child(0)).value, ",", cast<Other>(holder.saved).value, "\n");
+    print("handles:", identity(item) == item, ",", cast<object>(other) == holder.saved, ",",
+          cast<Item>(identity(item)) == item, "\n");
+    print("once:", cast<Item>(receiver().get_child(index())).value, ",", receiver_calls, ",", index_calls, "\n");
+    print("numeric:", root.get_child(0.9) == item, ",", root.get_child(1.9f) == other, "\n");
+    root.get_child(0);
+
+    var branch:Group = new Group();
+    var leaf:Item = new Item();
+    root.add_child(branch);
+    branch.add_child(leaf);
+    print("nested:", root.get_child(2).get_child(0) == leaf, ",",
+          cast<Item>(root.get_child(2).get_child(0)).value, "\n");
+    var destination:Group = new Group();
+    destination.attach(item);
+    print("reparent:", root.get_child(0) == other, ",", root.get_child(1) == branch, ",",
+          destination.get_child(0) == item, "\n");
+    destination.add_child(root.get_child(0));
+    destination.get_child(0).add_child(destination.get_child(1));
+    print("opaque:", root.get_child(0) == branch, ",",
+          destination.get_child(0).get_child(0) == other, "\n");
+}

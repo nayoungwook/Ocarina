@@ -48,3 +48,32 @@ struct Type find_type(const ParserContext &pc, const std::string &type_str) {
 	if (object_type != pc.object_type_smtb.end()) return object_type->second;
 	panic("Failed to find type!", pc.tc);
 }
+
+static bool derives_from(const ParserContext &pc, Type derived, const Type &base) {
+	while (derived.type_kind == TK_Object) {
+		if (derived.type_str == base.type_str)
+			return true;
+		derived = pc.object_data.at(derived.data.object_data).parent_type;
+	}
+	return false;
+}
+
+bool is_object_reference(const Type &type) {
+	return type.type_kind == TK_Object || type.type_str == "object";
+}
+
+bool is_castable(const ParserContext &pc, const Type &source, const Type &target) {
+	if (source.type_str == target.type_str)
+		return true;
+	if (source.type_kind == TK_Object && target.type_str == "object")
+		return true;
+	if (source.type_kind != TK_Null && source.type_kind != target.type_kind)
+		return false;
+	if (source.type_kind == TK_Null)
+		return is_object_reference(target) || target.type_str == "string" || target.type_str == "window";
+	if (source.type_kind == TK_Numeric)
+		return source.data.numeric_data.rank <= target.data.numeric_data.rank;
+	if (source.type_kind == TK_Object)
+		return derives_from(pc, source, target);
+	return false;
+}

@@ -11,6 +11,7 @@ static unsigned add_size(const ParserContext &pc, unsigned offset, unsigned size
 
 static bool is_super_call(const Node &node) {
 	return node.type == AST_FunctionCall &&
+		!std::get<FuncCallAST>(node.ast).is_super_method &&
 		std::get<FuncCallAST>(node.ast).func_name_tok.str == "super";
 }
 
@@ -26,6 +27,28 @@ static void add_builtin_member(ParserContext &pc, ObjectData &object,
 
 	pc.var_data.push_back(data);
 	object.member_vars.emplace(name, std::move(data));
+}
+
+static void add_builtin_function(ParserContext &pc, ObjectData &object,
+	const std::string &name,
+	const std::string &ret_type_name,
+	std::vector<Type> arg_types) {
+	FuncData data = {};
+
+	data.arg_count = static_cast<unsigned>(arg_types.size());
+	data.arg_types = std::move(arg_types);
+	data.func_name = name;
+	data.id = static_cast<unsigned>(object.member_funcs.size() + 1);
+	data.is_constructor = false;
+	data.is_builtin = true;
+	data.owner_object_index = object.object_type.data.object_data;
+	data.return_type = find_type(pc, ret_type_name);
+	data.scope_data = ScopeObject;
+	data.symbol_id = pc.func_data.size();
+	data.varargs = false;
+
+	pc.func_data.push_back(data);
+	object.member_funcs.emplace(name, std::move(data));
 }
 
 void SemanticsContext::register_objects(ParserContext &pc) {
@@ -52,18 +75,23 @@ void SemanticsContext::register_objects(ParserContext &pc) {
 		add_builtin_member(pc, data, "size", "vector");
 		add_builtin_member(pc, data, "rotation", "float");
 
+		add_builtin_function(pc, data, "update", "void", {});
+		add_builtin_function(pc, data, "render", "void", {});
+
 		pc.object_type_smtb[object_name] = data.object_type;
 		pc.object_data.push_back(std::move(data));
 	}
 
-	// register parent type.
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
 
 		ObjectAST &object_ast = std::get<ObjectAST>(node.ast);
-		if (object_ast.parent_name_tok.type == TokenType::TokEOF) continue;
+
+		if (object_ast.parent_name_tok.type == TokenType::TokEOF)
+			continue;
 
 		Type parent_type = find_type(pc, object_ast.parent_name_tok.str);
+
 		if (parent_type.type_kind != TK_Object) panic("Parent must be an object.", pc.tc);
 
 		pc.object_data.at(object_ast.object_data).parent_type = std::move(parent_type);
@@ -72,23 +100,27 @@ void SemanticsContext::register_objects(ParserContext &pc) {
 
 std::size_t SemanticsContext::register_func_data(ParserContext &pc, const Token &func_name,
 	const Type &ret_type, NodeId params, std::size_t object_id, bool is_constructor) {
+
 	FuncData data = {};
 	data.symbol_id = pc.func_data.size();
-	data.object_data = object_id;
+	data.owner_object_index = object_id;
 	data.func_name = func_name.str;
 	data.return_type = ret_type;
 	data.is_constructor = is_constructor;
-	if (object_id != NoNode && !is_constructor && func_name.str == "add_child")
-		panic("add_child is a built-in object method.", pc.tc);
+
 	data.scope_data = object_id == NoNode ? ScopeGlobal : ScopeObject;
 	const VarDeclBundleAST &params_ast = std::get<VarDeclBundleAST>(pc.get_node(params).ast);
+
 	for (const Node &param : params_ast.var_decls) {
 		const VarDeclAST &param_ast = std::get<VarDeclAST>(param.ast);
 		Type type = find_type(pc, param_ast.var_type_tok.str);
+
 		if (type.type_str == "void") panic("Parameter cannot have void type.", pc.tc);
 		data.arg_types.push_back(std::move(type));
 	}
+
 	data.arg_count = static_cast<unsigned>(data.arg_types.size());
+
 	if (object_id == NoNode) {
 		if (pc.glob_func_smtb.contains(data.func_name) || pc.syscall_smtb.contains(data.func_name))
 			panic("Duplicate function: " + data.func_name, pc.tc);
@@ -97,15 +129,26 @@ std::size_t SemanticsContext::register_func_data(ParserContext &pc, const Token 
 	}
 	else {
 		ObjectData &object_data = pc.object_data.at(object_id);
-		if (object_data.member_funcs.contains(data.func_name)) panic("Duplicate member function: " + data.func_name, pc.tc);
+		const auto existing = object_data.member_funcs.find(data.func_name);
+		if (existing != object_data.member_funcs.end()) {
+			if (!existing->second.is_builtin || is_constructor)
+				panic("Duplicate member function: " + data.func_name, pc.tc);
+			data.symbol_id = existing->second.symbol_id;
+			data.id = existing->second.id;
+			pc.func_data.at(data.symbol_id) = data;
+			existing->second = data;
+			return data.symbol_id;
+		}
 		data.id = static_cast<unsigned>(object_data.member_funcs.size() + 1);
 		object_data.member_funcs[data.func_name] = data;
 		if (is_constructor) {
 			if (object_data.constructor.is_constructor) panic("Duplicate constructor.", pc.tc);
 			if (data.func_name != object_data.object_type.type_str) panic("Constructor name must match the object.", pc.tc);
+
 			object_data.constructor = data;
 		}
 	}
+
 	pc.func_data.push_back(data);
 	return data.symbol_id;
 }
@@ -207,7 +250,7 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 	}
 
 	for (FuncData &function : pc.func_data) {
-		if (function.scope_data != ScopeObject || function.object_data != object_id)
+		if (function.scope_data != ScopeObject || function.owner_object_index != object_id)
 			continue;
 
 		unsigned inherited_id = 0;
@@ -319,7 +362,9 @@ void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &ex
 	Type actual = infer_type(pc, node);
 	if (actual.type_str == expected.type_str)
 		return;
-	if (actual.type_kind == TK_Null && (expected.type_kind == TK_Object ||
+	if (actual.type_kind == TK_Object && expected.type_str == "object")
+		return;
+	if (actual.type_kind == TK_Null && (is_object_reference(expected) ||
 		expected.type_str == "string" || expected.type_str == "window"))
 		return;
 	const auto scalar = [](const Type &type) {
@@ -337,13 +382,37 @@ void SemanticsContext::bind_add_child(ParserContext &pc, Node &node, FuncCallAST
 	if (call.params.size() != 1)
 		panic("add_child requires one object argument.", pc.tc);
 	check_semantics(pc, call.params.front());
-	if (infer_type(pc, call.params.front()).type_kind != TK_Object)
+	if (!is_object_reference(infer_type(pc, call.params.front())))
 		panic("add_child requires an object argument.", pc.tc);
 	if (node.attr != NoNode)
 		panic("add_child has no return value.", pc.tc);
-	call.is_add_child = true;
+	call.attr_syscall_type = AttrSyscallType::ATTR_SYSCALL_ADD_CHILD;
 	call.is_syscall = false;
 	call.func_data = NoNode;
+}
+
+void SemanticsContext::bind_get_child(ParserContext &pc, Node &node, FuncCallAST &call) {
+	if (call.params.size() != 1)
+		panic("get_child requires one numeric argument.", pc.tc);
+
+	check_semantics(pc, call.params.front());
+	if (infer_type(pc, call.params.front()).type_kind != TK_Numeric)
+		panic("get_child requires one numeric argument.", pc.tc);
+
+	call.attr_syscall_type = AttrSyscallType::ATTR_SYSCALL_GET_CHILD;
+	call.is_syscall = false;
+	call.func_data = NoNode;
+	resolve_attr(pc, find_type(pc, "object"), node);
+}
+
+void SemanticsContext::bind_child_size(ParserContext &pc, Node &node, FuncCallAST &call) {
+	if (call.params.size() != 0)
+		panic("child_size requires no arguments", pc.tc);
+
+	call.attr_syscall_type = AttrSyscallType::ATTR_SYSCALL_CHILD_SIZE;
+	call.is_syscall = false;
+	call.func_data = NoNode;
+	resolve_attr(pc, find_type(pc, "int"), node);
 }
 
 void SemanticsContext::check_semantics_body(ParserContext &pc, std::vector<Node> &body) {
@@ -382,8 +451,39 @@ std::size_t SemanticsContext::bind_super_call(ParserContext &pc, const Node &nod
 	return parent.data.object_data;
 }
 
+void SemanticsContext::bind_super_method(ParserContext &pc, FuncCallAST &call) const {
+	if (current_object == NoNode || current_func == NoNode)
+		panic("super.method() is only allowed in an object method or constructor.", pc.tc);
+
+	const Type &parent = pc.object_data.at(current_object).parent_type;
+	if (parent.type_str.empty())
+		panic("super.method() requires a parent object.", pc.tc);
+	call.super_object = parent.data.object_data;
+	call.func_data = find_member_func_data(pc, call.super_object, call.func_name_tok.str);
+	if (call.func_data == NoNode)
+		panic("Unknown parent method: " + call.func_name_tok.str, pc.tc);
+	if (pc.func_data.at(call.func_data).is_constructor)
+		panic("Parent constructors must be called with super().", pc.tc);
+	call.is_syscall = false;
+}
+
 void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node) {
 	if (node.attr == NoNode) return;
+
+	if (type_of_node.type_str == "object") {
+		Node &member = pc.get_node(node.attr);
+
+		if (member.type == AST_FunctionCall) { // for attr call from object, it should be super() or attr_syscall
+			FuncCallAST &call = std::get<FuncCallAST>(member.ast);
+
+			if (call.is_super_method)
+				panic("super.method() cannot have an explicit object receiver.", pc.tc);
+			if (check_attr_syscall(pc, call, member))
+				return;
+		}
+
+		panic("Cast object to a concrete type before accessing members.", pc.tc);
+	}
 	if (type_of_node.type_str == "vector") {
 		Node &component = pc.get_node(node.attr);
 		if (component.type != AST_Identifier)
@@ -400,6 +500,28 @@ void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node,
 	register_attr_data(pc, type_of_node.data.object_data, pc.get_node(node.attr));
 }
 
+bool SemanticsContext::check_attr_syscall(ParserContext &pc, FuncCallAST &func_call_ast, Node &node) {
+	if (func_call_ast.func_name_tok.str == "add_child") {
+		func_call_ast.is_attr = true;
+		bind_add_child(pc, node, func_call_ast);
+		return true;
+	}
+
+	if (func_call_ast.func_name_tok.str == "get_child") {
+		func_call_ast.is_attr = true;
+		bind_get_child(pc, node, func_call_ast);
+		return true;
+	}
+
+	if (func_call_ast.func_name_tok.str == "child_size") {
+		func_call_ast.is_attr = true;
+		bind_child_size(pc, node, func_call_ast);
+		return true;
+	}
+
+	return false;
+}
+
 void SemanticsContext::register_attr_data(ParserContext &pc, std::size_t attr_of, Node &node) {
 	Type type_of_node;
 	if (node.type == AST_Identifier) {
@@ -413,11 +535,13 @@ void SemanticsContext::register_attr_data(ParserContext &pc, std::size_t attr_of
 	}
 	else if (node.type == AST_FunctionCall) {
 		FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
-		if (func_call_ast.func_name_tok.str == "add_child") {
-			func_call_ast.is_attr = true;
-			bind_add_child(pc, node, func_call_ast);
+		if (func_call_ast.is_super_method)
+			panic("super.method() cannot have an explicit object receiver.", pc.tc);
+
+		if (check_attr_syscall(pc, func_call_ast, node)) {
 			return;
 		}
+
 		func_call_ast.func_data = find_member_func_data(pc, attr_of, func_call_ast.func_name_tok.str);
 		if (func_call_ast.func_data == NoNode) panic("Unknown member function: " + func_call_ast.func_name_tok.str, pc.tc);
 		func_call_ast.is_attr = true;
@@ -441,12 +565,16 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		current_object = object_ast.object_data;
 		const Type &parent = pc.object_data.at(current_object).parent_type;
 		if (!parent.type_str.empty() && pc.object_data.at(parent.data.object_data).constructor.is_constructor) {
+
 			const auto constructor = std::find_if(object_ast.body.begin(), object_ast.body.end(),
 				[](const Node &member) { return member.type == AST_Constructor; });
-			if (constructor == object_ast.body.end())
+			bool is_constructor_empty = constructor == object_ast.body.end();
+			if (is_constructor_empty)
 				panic("A child object must declare a constructor that calls super().", pc.tc);
+
 			const auto &body = std::get<ConstructorAST>(constructor->ast).body;
-			if (body.empty() || !is_super_call(body.front()))
+			bool is_not_super_call_first = body.empty() || !is_super_call(body.front());
+			if (is_not_super_call_first)
 				panic("A child constructor must call super() as its first statement.", pc.tc);
 		}
 		for (Node &member : object_ast.body) check_semantics(pc, member);
@@ -473,6 +601,18 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		if (current_func != NoNode) register_local_var_data(pc, var_decl);
 		break;
 	}
+	case AST_Cast: {
+		CastAST &cast = std::get<CastAST>(node.ast);
+		const Type target = find_type(pc, cast.target_type_tok.str);
+		check_child(pc, cast.expr);
+		const Type source = infer_type(pc, pc.get_node(cast.expr));
+		if (source.type_str == "void" || target.type_str == "void" || target.type_kind == TK_Null ||
+			(!is_castable(pc, source, target) && !is_castable(pc, target, source)))
+			panic("Cannot cast " + source.type_str + " to " + target.type_str + ".", pc.tc);
+		cast.target_type = target;
+		resolve_attr(pc, cast.target_type, node);
+		break;
+	}
 	case AST_This: {
 		if (current_object == NoNode)
 			panic("this is only allowed in an object context.", pc.tc);
@@ -490,11 +630,19 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 	}
 	case AST_FunctionCall: {
 		FuncCallAST &func_call_ast = std::get<FuncCallAST>(node.ast);
-		if (current_object != NoNode && func_call_ast.func_name_tok.str == "add_child") {
+		if (!func_call_ast.is_super_method && current_object != NoNode &&
+			func_call_ast.func_name_tok.str == "add_child") {
 			bind_add_child(pc, node, func_call_ast);
 			break;
 		}
-		if (is_super_call(node)) {
+		if (!func_call_ast.is_super_method && current_object != NoNode &&
+			func_call_ast.func_name_tok.str == "get_child") {
+			bind_get_child(pc, node, func_call_ast);
+			break;
+		}
+		if (func_call_ast.is_super_method)
+			bind_super_method(pc, func_call_ast);
+		else if (is_super_call(node)) {
 			func_call_ast.super_object = bind_super_call(pc, node);
 			func_call_ast.func_data = pc.object_data.at(func_call_ast.super_object).constructor.symbol_id;
 			func_call_ast.is_syscall = false;
@@ -512,7 +660,8 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 		if (func_data.is_constructor && func_call_ast.super_object == NoNode)
 			panic("Constructors must be called with new or super().", pc.tc);
 		if (!func_data.varargs && func_data.arg_count != func_call_ast.params.size())
-			panic(func_call_ast.super_object != NoNode ? "Wrong super() parameter count."
+			panic(func_call_ast.is_super_method ? "Wrong super method argument count."
+				: func_call_ast.super_object != NoNode ? "Wrong super() parameter count."
 				: "Wrong function argument count.", pc.tc);
 		for (std::size_t i = 0; i < func_call_ast.params.size(); ++i) {
 			if (func_data.varargs)
@@ -558,7 +707,7 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 			const bool logical = bin_expr_ast.op_type == OpAND || bin_expr_ast.op_type == OpOR;
 			const bool equality = bin_expr_ast.op_type == OpEQUAL || bin_expr_ast.op_type == OpNOTEQUAL;
 			const auto reference = [](const Type &type) {
-				return type.type_kind == TK_Object ||
+				return is_object_reference(type) ||
 					type.type_str == "string" || type.type_str == "window" || type.type_kind == TK_Null;
 				};
 			if (numeric(lhs) && numeric(rhs)) {
@@ -628,6 +777,21 @@ Type SemanticsContext::infer_operation_type(const ParserContext &pc,
 	return find_type(pc, "int");
 }
 
+Type SemanticsContext::get_return_type_of_attr_syscall(const ParserContext &pc, AttrSyscallType attr_syscall) const {
+	switch (attr_syscall) {
+	case AttrSyscallType::ATTR_SYSCALL_ADD_CHILD:
+		return find_type(pc, "void");
+	case AttrSyscallType::ATTR_SYSCALL_GET_CHILD:
+		return find_type(pc, "object");
+	case AttrSyscallType::ATTR_SYSCALL_CHILD_SIZE:
+		return find_type(pc, "int");
+	default:
+		panic("Failed to infer type of syscall", pc.tc);
+	}
+
+	return find_type(pc, "void");
+}
+
 Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) const {
 	if (node.attr != NoNode) return infer_type(pc, pc.get_node(node.attr));
 	switch (node.type) {
@@ -636,15 +800,21 @@ Type SemanticsContext::infer_type(const ParserContext &pc, const Node &node) con
 	case AST_BoolLiteral: return find_type(pc, "bool");
 	case AST_Null: return find_type(pc, "null");
 	case AST_This: return pc.object_data.at(std::get<ThisAST>(node.ast).object_data).object_type;
+	case AST_Cast: return std::get<CastAST>(node.ast).target_type;
 	case AST_Identifier: {
 		const IdentifierAST &ident = std::get<IdentifierAST>(node.ast);
 		if (ident.vector_component >= 0) return find_type(pc, "float");
 		return pc.var_data.at(ident.var_data).type;
 	}
+
 	case AST_FunctionCall: {
 		const FuncCallAST &call = std::get<FuncCallAST>(node.ast);
-		return call.is_add_child ? find_type(pc, "void") : pc.get_func_data(call).return_type;
+		if (call.attr_syscall_type != AttrSyscallType::ATTR_SYSCALL_NONE) {
+			return get_return_type_of_attr_syscall(pc, call.attr_syscall_type);
+		}
+		return pc.get_func_data(call).return_type;
 	}
+
 	case AST_New:
 		return pc.object_data.at(std::get<NewAST>(node.ast).object_data).object_type;
 	case AST_IdentIncrease: return infer_type(pc, pc.get_node(std::get<IdentIncreAST>(node.ast).ident_node));

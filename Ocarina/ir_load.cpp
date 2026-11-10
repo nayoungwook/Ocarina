@@ -372,8 +372,12 @@ std::vector<VMInstruction> IRLoader::decode_function_instructions(const OVM &vm,
 
 		if (opcode == OP_ADD_CHILD && instruction.operands.u32[0] > 1)
 			reader_error("invalid add_child receiver");
+		if (opcode == OP_GET_CHILD && instruction.operands.u32[0] > 1)
+			reader_error("invalid get_child receiver");
+
 		if (opcode == OP_VECTOR_COMPONENT && instruction.operands.u32[0] > 2)
 			reader_error("invalid vector component");
+		
 		if (opcode == OP_SAVE_VECTOR_COMPONENT &&
 			(instruction.operands.u32[0] > static_cast<unsigned>(VectorStorage::Attribute) ||
 			 instruction.operands.u32[2] > 2))
@@ -384,7 +388,7 @@ std::vector<VMInstruction> IRLoader::decode_function_instructions(const OVM &vm,
 			 instruction.operands.u32[0] > static_cast<unsigned>(VMOPType::OPRND_VEC)))
 			reader_error("invalid conversion type");
 
-		if ((opcode == OP_NEW_OBJECT || opcode == OP_CALL_SUPER) &&
+		if ((opcode == OP_NEW_OBJECT || opcode == OP_CALL_SUPER || opcode == OP_CALL_SUPER_METHOD) &&
 			!vm.object_data.contains(instruction.operands.u32[0]))
 			reader_error("undefined instruction object id");
 

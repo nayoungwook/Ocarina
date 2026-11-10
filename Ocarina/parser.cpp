@@ -19,6 +19,7 @@ void ParserContext::init_primitive() {
 	primitive_type_smtb["bool"] = gen_primitive_type("bool", 1);
 	primitive_type_smtb["void"] = gen_primitive_type("void", 0);
 	primitive_type_smtb["null"] = gen_null_type();
+	primitive_type_smtb["object"] = gen_primitive_type("object", 8);
 	primitive_type_smtb["string"] = gen_primitive_type("string", 8);
 	primitive_type_smtb["vector"] = gen_primitive_type("vector", 4 * 3);
 	primitive_type_smtb["window"] = gen_primitive_type("window", 8);
@@ -43,7 +44,7 @@ void ParserContext::compile_file(TokenizerContext input_tc) {
 		struct Node node = parse_stmt();
 		nodes.push_back(std::move(node));
 	}
-	source_files.push_back({tc.source_name, first, nodes.size() - first, imports[tc.source_name]});
+	source_files.push_back({ tc.source_name, first, nodes.size() - first, imports[tc.source_name] });
 }
 
 NodeId ParserContext::store_node(struct Node node) {
@@ -54,6 +55,8 @@ NodeId ParserContext::store_node(struct Node node) {
 }
 
 Token ParserContext::parse_type_token() {
+	if (tc.peek().type == TokenType::TokObject)
+		return tc.pull();
 	return tc.consume(TokenType::TokIdent);
 }
 
@@ -74,7 +77,7 @@ struct Node &ParserContext::get_node(NodeId id) {
 struct ParamData ParserContext::parse_func_call_params() {
 	struct ParamData param_data = {};
 	tc.consume(TokenType::TokLParen);
-	
+
 	while (tc.peek().type != TokenType::TokRParen) {
 		struct Node expr = parse_expression();
 		param_data.params.push_back(std::move(expr));
@@ -100,13 +103,13 @@ struct Node ParserContext::gen_func_call_node(const struct Token &first) {
 
 void ParserContext::parse_attribute(struct Node &ident_node) {
 	if (tc.peek().type != TokenType::TokIdent) panic("Expected attribute name.", tc);
-	
+
 	struct Node attr = parse_expr_node();
 	if (attr.type == AST_Identifier) std::get<IdentifierAST>(attr.ast).is_attr = true;
 	if (attr.type == AST_FunctionCall) std::get<FuncCallAST>(attr.ast).is_attr = true;
-	
+
 	NodeId id = store_node(std::move(attr));
-	
+
 	if (ident_node.attr == NoNode) {
 		ident_node.attr = id;
 	}
@@ -132,7 +135,7 @@ struct Node ParserContext::gen_ident_node(const struct Token &first) {
 struct Node ParserContext::gen_func_param_node() {
 	struct VarDeclBundleAST result = {};
 	tc.consume(TokenType::TokLParen);
-	
+
 	while (tc.peek().type != TokenType::TokRParen) {
 		struct Token name_tok = tc.consume(TokenType::TokIdent);
 		tc.consume(TokenType::TokColon);
@@ -146,7 +149,7 @@ struct Node ParserContext::gen_func_param_node() {
 		tc.consume(TokenType::TokComma);
 		if (tc.peek().type == TokenType::TokRParen) panic("Expected parameter after comma.", tc);
 	}
-	
+
 	tc.consume(TokenType::TokRParen);
 
 	return pack(AST_VariableDeclarationBundle, std::move(result));
@@ -157,7 +160,7 @@ std::vector<struct Node> ParserContext::gen_body() {
 	std::vector<struct Node> result;
 	while (tc.peek().type != TokenType::TokRBracket) {
 		if (tc.peek().type == TokenType::TokEOF) panic("Expected closing brace.", tc);
-			struct Node element = parse_stmt();
+		struct Node element = parse_stmt();
 		result.push_back(std::move(element));
 	}
 	tc.consume(TokenType::TokRBracket);
@@ -304,7 +307,8 @@ struct Node ParserContext::gen_for_stmt_node(const struct Token &first) {
 	if (tc.peek().type == TokenType::TokVar) {
 		const Token var = tc.pull();
 		init = gen_var_decl_node(var);
-	} else {
+	}
+	else {
 		init = parse_expression();
 		tc.consume(TokenType::TokSemiColon);
 	}
@@ -366,6 +370,17 @@ struct Node ParserContext::gen_new_node(const struct Token &first) {
 	new_ast.params = std::move(param_data.params);
 
 	return pack(AST_New, std::move(new_ast));
+}
+
+Node ParserContext::gen_cast_node() {
+	CastAST cast;
+	tc.consume(TokenType::TokLesser);
+	cast.target_type_tok = parse_type_token();
+	tc.consume(TokenType::TokGreater);
+	tc.consume(TokenType::TokLParen);
+	cast.expr = store_node(parse_expression());
+	tc.consume(TokenType::TokRParen);
+	return pack(AST_Cast, std::move(cast));
 }
 
 bool ParserContext::is_number_literal_integer(const std::string &num_lit_str) {
@@ -466,6 +481,17 @@ struct Node ParserContext::parse_expr_node() {
 
 	case TokenType::TokIdent: {
 		struct Token nt = tc.peek();
+		if (first.str == "cast" && nt.type == TokenType::TokLesser)
+			return gen_cast_node();
+		if (first.str == "super" && nt.type == TokenType::TokDot) {
+			tc.consume(TokenType::TokDot);
+			const Token method = tc.consume(TokenType::TokIdent);
+			if (tc.peek().type != TokenType::TokLParen)
+				panic("super requires a method call.", pc.tc);
+			Node call = gen_func_call_node(method);
+			std::get<FuncCallAST>(call.ast).is_super_method = true;
+			return call;
+		}
 		if (nt.type == TokenType::TokLParen) {
 			return gen_func_call_node(first);
 		}
@@ -790,8 +816,8 @@ struct Node ParserContext::parse_expression() {
 
 	if (((tok = tc.peek()).type != TokenType::TokEOF) &&
 		(tok.type == TokenType::TokAssign || tok.type == TokenType::TokPlusAssign ||
-		 tok.type == TokenType::TokMinusAssign || tok.type == TokenType::TokMultAssign ||
-		 tok.type == TokenType::TokDivAssign || tok.type == TokenType::TokModAssign)) {
+			tok.type == TokenType::TokMinusAssign || tok.type == TokenType::TokMultAssign ||
+			tok.type == TokenType::TokDivAssign || tok.type == TokenType::TokModAssign)) {
 		TokenType op = tc.pull().type;
 		struct Node right = parse_expression();
 

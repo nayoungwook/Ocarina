@@ -33,3 +33,5 @@ struct Type gen_numeric_type(const std::string &type_str, unsigned nbyte, struct
 struct Type gen_object_type(const std::string &type_str);
 struct Type gen_null_type();
 struct Type find_type(const ParserContext &pc, const std::string &type_str);
+bool is_castable(const ParserContext &pc, const Type &source, const Type &target);
+bool is_object_reference(const Type &type);

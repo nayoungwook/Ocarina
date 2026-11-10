@@ -40,6 +40,7 @@ enum ASTType {
 	AST_BoolLiteral = 20,
 	AST_Negative = 21,
 	AST_This = 22,
+	AST_Cast = 23,
 };
 
 struct NumberLiteralAST {
@@ -140,12 +141,21 @@ struct ParamData {
 	std::vector<struct Node> params;
 };
 
+enum class AttrSyscallType {
+	ATTR_SYSCALL_NONE,
+	ATTR_SYSCALL_ADD_CHILD,
+	ATTR_SYSCALL_GET_CHILD,
+	ATTR_SYSCALL_CHILD_SIZE,
+};
+
 struct FuncCallAST {
 	struct Token func_name_tok;
 	std::vector<struct Node> params;
 	bool is_attr = {};
+
+	AttrSyscallType attr_syscall_type = AttrSyscallType::ATTR_SYSCALL_NONE;
 	bool is_syscall = false;
-	bool is_add_child = false;
+	bool is_super_method = false;
 
 	// semantics
 	std::size_t func_data = NoNode;
@@ -217,9 +227,15 @@ struct NegAST {
 	NodeId ast = NoNode;
 };
 
+struct CastAST {
+	Token target_type_tok;
+	NodeId expr = NoNode;
+	Type target_type;
+};
+
 struct Node {
 	enum ASTType type = AST_None;
-	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, NegAST, ThisAST> ast;
+	std::variant<std::monostate, NumberLiteralAST, StringLiteralAST, IdentifierAST, BoolLiteralAST, VarDeclAST, VarDeclBundleAST, BinExprAST, UnaryExprAST, IfStmtAST, FuncDeclAST, FuncCallAST, IdentIncreAST, IdentDecreAST, ForStmtAST, ReturnAST, ConstructorAST, ObjectAST, NewAST, NullAST, NegAST, ThisAST, CastAST> ast;
 	NodeId attr = NoNode;
 };
 

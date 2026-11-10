@@ -1,0 +1,85 @@
+var order:int = 0;
+
+func mark(value:int):float {
+    order = order * 10 + value;
+    return value;
+}
+
+object Root {
+    var value:int = 1;
+    func update():void { value += 1; }
+    func render():void { value += 10; }
+    func calculate(value:float):double { return value + 0.5; }
+    func combine(a:float, b:float):float { return a * 10 + b; }
+    func self():Root { return this; }
+}
+
+object Middle extends Root {
+    func update():void {
+        super.update();
+        value += 100;
+    }
+    func render():void {
+        super.render();
+        value += 1000;
+    }
+    func calculate(value:float):double { return super.calculate(value) + 1; }
+}
+
+object Leaf extends Middle {
+    func update():void {
+        super.update();
+        value += 10000;
+    }
+    func render():void {
+        super.render();
+        value += 100000;
+    }
+    func calculate(value:float):double { return super.calculate(value) + 10; }
+    func parent_calculate(value:float):double { return super.calculate(value); }
+    func parent_value():int { return super.self().value; }
+    func parent_self():Root { return super.self(); }
+    func run_parent():void { super.update(); }
+    func ordered():float { return super.combine(mark(1), mark(2)); }
+}
+
+object Descendant extends Leaf {}
+object NoForward extends Root {}
+object ForwardDefault extends NoForward {
+    func update():void { super.update(); }
+}
+
+object Constructed {
+    var value:int;
+    constructor Constructed(value:int) { this.value = value; }
+    func update():void { value++; }
+}
+
+object ConstructedChild extends Constructed {
+    constructor ConstructedChild() {
+        super(7);
+        super.update();
+    }
+}
+
+func main():void {
+    var leaf:Leaf = new Leaf();
+    leaf.update();
+    print("update:", leaf.value, "\n");
+    leaf.render();
+    print("render:", leaf.value, "\n");
+    print("methods:", leaf.calculate(2), ",", leaf.parent_calculate(2), "\n");
+    print("receiver:", leaf.parent_value(), ",", leaf.parent_self() == leaf, "\n");
+    var descendant:Descendant = new Descendant();
+    descendant.run_parent();
+    print("lexical:", descendant.value, "\n");
+    var no_forward:NoForward = new NoForward();
+    no_forward.update();
+    no_forward.render();
+    var forward_default:ForwardDefault = new ForwardDefault();
+    forward_default.update();
+    print("defaults:", no_forward.value, ",", forward_default.value, "\n");
+    var constructed:ConstructedChild = new ConstructedChild();
+    print("constructor:", constructed.value, "\n");
+    print("order:", leaf.ordered(), ",", order, "\n");
+}

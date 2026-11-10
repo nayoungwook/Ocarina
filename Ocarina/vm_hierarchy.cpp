@@ -39,3 +39,20 @@ void VMHierarchy::add_child(unsigned parent, unsigned child) {
 	siblings.erase(std::find(siblings.begin(), siblings.end(), child));
 	node.parent = parent;
 }
+
+unsigned VMHierarchy::get_child(unsigned parent, std::int32_t index) const {
+	if (parent == 0 || parent >= objects.size())
+		throw OVMPanic("Invalid or null object reference.");
+	const auto &children = objects[parent].children;
+	if (index < 0 || static_cast<std::size_t>(index) >= children.size())
+		throw OVMPanic("Child index out of range.");
+	return children[static_cast<std::size_t>(index)];
+}
+
+unsigned VMHierarchy::get_child_size(unsigned parent) const {
+	if (parent == 0 || parent >= objects.size())
+		throw OVMPanic("Invalid or null object reference.");
+	const auto &children = objects[parent].children;
+
+	return children.size();
+}

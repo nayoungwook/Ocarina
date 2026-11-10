@@ -22,6 +22,8 @@ public:
 	void register_bytecode(const std::string &path);
 	void load_files();
 	std::optional<VMOperand> run(std::ostream &out, RunMode mode = RunMode::WaitForWindow);
+	void update_hierarchy();
+	void render_hierarchy();
 
 	std::unordered_map<std::string, std::vector<byte>> byte_files;
 
@@ -33,7 +35,7 @@ public:
 
 	unsigned main_func_id = std::numeric_limits<unsigned>::max();
 
-	Engine engine;
+	Engine engine{this};
 
 private:
 	std::vector<VMOperand> vm_stack;
@@ -41,7 +43,7 @@ private:
 	VMHierarchy hierarchy;
 	VMStorage globals;
 	std::size_t stack_size = 0;
-	std::optional<std::reference_wrapper<SyscallContext>> syscalls;
+	std::optional<SyscallContext> syscalls;
 	std::optional<std::reference_wrapper<std::ostream>> output;
 
 	void clear_execution();
@@ -52,7 +54,9 @@ private:
 		std::vector<VMOperand> arguments = {},
 		unsigned hierarchy_index = 0);
 	std::optional<VMOperand> finish_frame();
-	std::optional<VMOperand> vm_exec_function(const VMFunctionData &function_data);
+	std::optional<VMOperand> vm_exec_function(const VMFunctionData &function_data,
+		unsigned hierarchy_index = 0);
+	void exec_hierarchy(std::string_view method);
 	void exec_instruction(const VMInstruction &instruction,
 		std::size_t &instruction_index,
 		VMFrame &frame,
@@ -65,4 +69,6 @@ private:
 	const VMFunctionData &vm_find_member_function_data(unsigned object_id, unsigned id) const;
 	void vm_exec_object_initializers(unsigned object_id, unsigned hierarchy_index);
 	void exec_object_instruction(const VMInstruction &instruction, unsigned hierarchy_index);
+	void exec_new_object(const VMInstruction &instruction);
+	void exec_object_member_instruction(const VMInstruction &instruction, unsigned hierarchy_index);
 };

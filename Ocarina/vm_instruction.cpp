@@ -43,7 +43,7 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 		break;
 	case OP_SYSCALL: {
 		const auto operands = update_function_arguments(arguments[1]);
-		const auto result = syscalls->get().handle_syscall(arguments[0],
+		const auto result = syscalls->handle_syscall(arguments[0],
 			operands,
 			this->vm_string_pool,
 			output->get());
@@ -64,14 +64,16 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 				arguments[1],
 				static_cast<unsigned>(receiver.val.i32),
 				true);
-		} else if (instruction.opcode == OP_CALL_OBJECT) {
+		}
+		else if (instruction.opcode == OP_CALL_OBJECT) {
 			if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
 				throw OVMPanic("Member call requires an object.");
 			call_function(
 				vm_find_member_function_data(hierarchy.at(hierarchy_index).object_id, arguments[0]),
 				arguments[1],
 				hierarchy_index);
-		} else
+		}
+		else
 			call_function(this->function_data.at(arguments[0]), arguments[1]);
 		break;
 	}
@@ -83,6 +85,15 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 		if (!constructor.is_constructor)
 			throw OVMPanic("Parent constructor not found.");
 		call_function(constructor, arguments[1], hierarchy_index);
+		break;
+	}
+	case OP_CALL_SUPER_METHOD: {
+		if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
+			throw OVMPanic("super method call requires an object.");
+		const VMFunctionData &method = vm_find_member_function_data(arguments[0], arguments[1]);
+		if (method.is_constructor)
+			throw OVMPanic("super method call requires a method.");
+		call_function(method, arguments[2], hierarchy_index);
 		break;
 	}
 	case OP_LOAD_STR: {
@@ -163,10 +174,12 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 		if (instruction.opcode == OP_LDC_I4) {
 			operand.op_type = VMOPType::OPRND_INT32;
 			operand.val.i32 = instruction.operands.i32[0];
-		} else if (instruction.opcode == OP_LDC_F4) {
+		}
+		else if (instruction.opcode == OP_LDC_F4) {
 			operand.op_type = VMOPType::OPRND_FLOAT32;
 			operand.val.f32 = instruction.operands.f32;
-		} else {
+		}
+		else {
 			operand.op_type = VMOPType::OPRND_FLOAT64;
 			operand.val.f64 = instruction.operands.f64;
 		}
@@ -216,6 +229,36 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 			parent = static_cast<unsigned>(receiver.val.i32);
 		}
 		hierarchy.add_child(parent, static_cast<unsigned>(child.val.i32));
+		break;
+	}
+	case OP_GET_CHILD: {
+		const VMOperand index = vm_stack_pop();
+		if (index.op_type != VMOPType::OPRND_INT32)
+			throw OVMPanic("get_child requires an integer index.");
+		unsigned parent = hierarchy_index;
+		if (arguments[0] != 0) {
+			const VMOperand receiver = vm_stack_pop();
+			find_object(receiver);
+			parent = static_cast<unsigned>(receiver.val.i32);
+		}
+		VMOperand child;
+		child.op_type = VMOPType::OPRND_ADDRESS;
+		child.val.i32 = static_cast<std::int32_t>(hierarchy.get_child(parent, index.val.i32));
+		vm_stack_push(child);
+		break;
+	}
+	case OP_CHILD_SIZE: {
+		unsigned parent = hierarchy_index;
+		if (arguments[0] != 0) {
+			const VMOperand receiver = vm_stack_pop();
+			find_object(receiver);
+			parent = static_cast<unsigned>(receiver.val.i32);
+		}
+
+		VMOperand child;
+		child.op_type = VMOPType::OPRND_INT32;
+		child.val.i32 = static_cast<std::int32_t>(hierarchy.get_child_size(parent));
+		vm_stack_push(child);
 		break;
 	}
 	default:

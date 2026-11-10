@@ -90,6 +90,12 @@ IR은 Ocarina 단일 형식이며 API에서 형식을 선택하지 않습니다.
 예: `v.x = 3; v.y += 2; object.position.z++;`
 `vector(1, 2, 3).x`, `make_vector().y`처럼 임시 벡터의 성분을 읽을 수 있으며, 임시 벡터의 성분에는 대입할 수 없습니다.
 
+`cast<Type>(expr)`는 명시적 타입 변환입니다. 원본 `is_castable()` 규칙을 양방향으로 검사하여
+`int`·`float`·`double` 사이의 확대·축소 변환과 같은 상속 계층의 객체 업캐스트·다운캐스트를 허용합니다.
+캐스트 식의 결과 타입만 바뀌며 원본 변수의 선언 타입은 유지됩니다. 숫자는 `OP_CONVERT`로 변환하고,
+객체 참조는 같은 hierarchy 인덱스를 유지합니다. 객체의 실제 타입을 런타임에서 검사하지 않습니다.
+서로 무관한 타입과 `void`로의 캐스트는 컴파일 오류입니다.
+
 `this`는 현재 객체 인스턴스를 참조하는 예약어입니다. 메서드·생성자·멤버 초기화 식에서 사용할 수 있습니다.
 `this.value`, `this.method()`, `return this`, 다른 함수에 `this`를 인자로 전달하는 표현을 지원합니다.
 매개변수·지역 변수와 멤버 이름이 같을 때 `this.value`로 멤버를 지정할 수 있으며, `this` 자체에는 대입할 수 없습니다.
@@ -98,6 +104,10 @@ IR은 Ocarina 단일 형식이며 API에서 형식을 선택하지 않습니다.
 부모 생성자가 있으면 자식도 생성자를 선언하고 첫 문장에서 `super(...)`를 정확히 한 번 호출해야 합니다.
 호출 위치와 인자 개수·타입은 컴파일 시 검사합니다. 부모 생성자가 없으면 `super()`를 호출할 수 없습니다.
 객체 필드 초기화는 부모부터 자식까지 한 번씩 수행한 뒤 생성자 본문을 실행합니다.
+
+`super.update()`, `super.render()`, `super.method(...)`는 같은 객체에서 부모 타입의 메서드를 직접 실행합니다.
+함수를 작성한 타입의 직계 부모부터 찾으며 자식의 재정의 함수로 돌아가지 않습니다.
+자식의 메서드와 생성자 안에서 사용할 수 있고, 일반 메서드의 인자 변환과 반환값도 지원합니다.
 
 `+=`, `-=`, `*=`, `/=`, `%=` 복합 대입은 숫자·벡터 변수와 객체 멤버를 갱신합니다.
 `%`는 곱셈·나눗셈과 같은 우선순위이며, 대입은 오른쪽부터 결합합니다.
@@ -111,14 +121,26 @@ func main():void {
     var group:Group = new Group();
     var item:Item = new Item();
     group.add_child(item);
+    var first:Item = cast<Item>(group.get_child(0));
 }
 ```
 
 객체는 `VMHierarchy`에 안정적인 인덱스로 저장됩니다. 새 객체는 루트에 연결되며 각 객체가 부모 인덱스와 순서 있는 자식 목록을 가집니다.
 `obj.add_child(child)`는 서로 다른 타입의 객체도 자식으로 연결합니다. 객체 내부에서는 `add_child(child)`로 현재 객체에 연결할 수 있습니다.
 다른 부모에 속한 자식은 새 부모로 이동하고, 같은 부모에 중복 추가하면 목록을 유지합니다. 자기 자신·조상·null은 자식으로 추가할 수 없습니다.
-GC, 개별 객체 해제와 자식 조회·분리 API는 구현하지 않습니다. 전체 hierarchy는 실행 상태 초기화 시 정리합니다.
+`obj.get_child(index)`는 현재 자식 목록의 0부터 시작하는 순서로 조회하며, 객체 내부에서는 `get_child(index)`로 호출할 수 있습니다.
+인덱스는 숫자 하나를 받아 기존 숫자 변환 규칙에 따라 `int`로 변환합니다. 음수·범위 초과·null 수신 객체는 실행 오류입니다.
+반환 타입 `object`는 공통 객체 참조입니다. 변수·매개변수·반환값으로 사용할 수 있고, 모든 구체적인 객체 타입을 담을 수 있습니다.
+구체적인 멤버에 접근하려면 `cast<Item>(obj.get_child(0))`처럼 캐스트합니다. `object` 참조에서는 `add_child`·`get_child`를 직접 호출할 수 있습니다.
+GC, 개별 객체 해제와 자식 분리 API는 구현하지 않습니다. 전체 hierarchy는 실행 상태 초기화 시 정리합니다.
 기존 배열 타입·리터럴·인덱싱과 `push`, `remove`, `length`는 제거했습니다. 이를 사용하던 소스는 객체 계층 구조로 변경해야 합니다.
+
+엔진은 소유 VM을 직접 참조하며, 고정 업데이트마다 hierarchy의 모든 객체에 `update():void`를,
+렌더 프레임마다 `render():void`를 호출합니다. 각 타입의 기본 구현은 빈 함수이며 재정의할 수 있습니다.
+부모의 update·render도 실행하려면 자식의 함수에서 `super.update()`·`super.render()`를 명시적으로 호출합니다.
+호출 순서는 객체 생성 순서이며, 한 순회 중 생성된 객체는 다음 순회부터 참여합니다.
+Scene 없이도 두 함수가 실행됩니다. 창이 열려 있으면 `main`의 지역 객체를 포함한 VM 상태를 유지합니다.
+`ReturnAfterMain`을 사용하는 C++ 호출자는 출력 스트림을 창 실행이 끝날 때까지 유지해야 합니다.
 
 `ParserContext`, `TokenizerContext`, `IRContext`는 클래스입니다. AST 자식, 심볼, VM 객체 참조는 인덱스로 관리합니다.
 AST·토큰·타입·스택·hierarchy 데이터는 C++ 컨테이너가 값을 소유합니다.
@@ -137,9 +159,13 @@ load/save의 암시적 변환에 의존하던 기존 `.cb` 파일은 소스에�
 
 복합 대입 회귀 검사는 x64 Debug 빌드 후 `powershell -File tests/run_compound_assignment.ps1`로 실행합니다.
 메모리 배치·변환·컴파일 시 타입 검사 회귀 검사는 `powershell -File tests/run_memory_storage.ps1`로 실행합니다.
+캐스트 파서 검사는 `powershell -File tests/run_cast_parser.ps1`, 타입 검사·변환·실행 검사는 `powershell -File tests/run_cast.ps1`로 실행합니다.
 부모 생성자 호출과 컴파일 시 사용 규칙 검사는 `powershell -File tests/run_super_constructor.ps1`로 실행합니다.
+부모 메서드 호출과 다단계 상속·수신 객체·인자·반환값 검사는 `powershell -File tests/run_super_method.ps1`로 실행합니다.
 객체 연결과 제거된 배열 문법 검사는 `powershell -File tests/run_hierarchy.ps1`로 실행합니다.
+자식 조회·공통 객체 참조·캐스트·인덱스 검사는 `powershell -File tests/run_get_child.ps1`로 실행합니다.
 `this` 참조·멤버 접근·상속·컴파일 시 사용 규칙 검사는 `powershell -File tests/run_this.ps1`로 실행합니다.
+객체의 자동 update·render, 재정의·상속·생성·부모 변경·재실행 검사는 `powershell -File tests/run_hierarchy_frame.ps1`로 실행합니다.
 창이 열린 동안의 셸 입력·재실행·종료 검사는 `powershell -File tests/run_shell_engine.ps1`로 실행합니다.
 이 검사는 실제 SDL 창을 잠시 열었다가 닫습니다.
 바이트코드 파일 생성·독립 실행·재등록과 셸 명령 검사는 `powershell -File tests/run_bytecode_shell.ps1`로 실행합니다.

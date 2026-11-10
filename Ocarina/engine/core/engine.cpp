@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "../../vm.h"
 
 #include "camera.h"
 #include "display.h"
@@ -176,6 +177,16 @@ void Engine::start() {
 	}
 }
 
+void Engine::update_hierarchy() {
+	if (vm != nullptr)
+		vm->update_hierarchy();
+}
+
+void Engine::render_hierarchy() {
+	if (vm != nullptr)
+		vm->render_hierarchy();
+}
+
 bool Engine::run_frame() {
 	if (display == nullptr || renderer == nullptr || input == nullptr)
 		return false;
@@ -217,6 +228,9 @@ bool Engine::run_frame() {
 			current_scene->update();
 		if (after_scene_update)
 			after_scene_update(this);
+
+		update_hierarchy();
+
 		input->end_update();
 		++tick_count;
 		update_lag -= TIME_STEP;
@@ -227,10 +241,12 @@ bool Engine::run_frame() {
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	current_framebuffer = nullptr;
+	render_hierarchy();
 	if (current_scene != nullptr) {
 		current_scene->render();
 		current_scene->flush_render_context();
 	}
+
 	current_framebuffer = nullptr;
 	FrameBuffer::bind_screen_framebuffer();
 	SDL_GL_SwapWindow(display->get_window());
