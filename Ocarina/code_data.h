@@ -20,6 +20,7 @@ enum class VMOPType : std::uint8_t {
 	OPRND_ADDRESS,
 	OPRND_CHAR16,
 	OPRND_VEC,
+	OPRND_TEXTURE, // OPRND_TEXTURE binds with string pool index of path.
 };
 
 struct VMInstructionOperands {
@@ -55,6 +56,7 @@ struct VMVariableData {
 
 struct VMObjectData {
 	unsigned id = 0, parent_id = 0, size = 0;
+	bool is_scene = false;
 	std::string name;
 	VMFunctionData initializer;
 	std::map<unsigned, VMFunctionData> function_data;

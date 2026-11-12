@@ -1,7 +1,0 @@
-globals:1,A,-7,1,2,(3, 4, 5),packed
-locals:0,C,-9,3,1.5,(0, 0, 0),local
-args:1,D,3,1.25,1.5,(2, 2, 2),local
-args:1,E,4,5,6,(7, 7, 7),converted
-object:1,B,-9,5,3.5,(2, 2, 2),object,-9
-refs:1,1,1
-recursive:33

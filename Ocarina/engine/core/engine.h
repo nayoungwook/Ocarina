@@ -76,6 +76,7 @@ class Engine {
 
         FrameBuffer *current_framebuffer = nullptr;
         Scene *current_scene = nullptr;
+		Scene *vm_render_scene = nullptr;
 		std::function<void(Engine *)> after_scene_update;
         OVM *vm = nullptr;
         Display *display = nullptr;

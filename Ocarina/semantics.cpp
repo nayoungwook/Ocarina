@@ -24,6 +24,8 @@ static void add_builtin_member(ParserContext &pc, ObjectData &object,
 	data.type = find_type(pc, type_name);
 	data.var_name = name;
 	data.scope_data = ScopeObject;
+	data.offset = object.instance_size;
+	object.instance_size = add_size(pc, object.instance_size, data.type.nbyte);
 
 	pc.var_data.push_back(data);
 	object.member_vars.emplace(name, std::move(data));
@@ -52,6 +54,11 @@ static void add_builtin_function(ParserContext &pc, ObjectData &object,
 }
 
 void SemanticsContext::register_objects(ParserContext &pc) {
+	ObjectData builtin_object = {};
+	add_builtin_member(pc, builtin_object, "position", "vector");
+	add_builtin_member(pc, builtin_object, "size", "vector");
+	add_builtin_member(pc, builtin_object, "rotation", "float");
+
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
 
@@ -68,12 +75,11 @@ void SemanticsContext::register_objects(ParserContext &pc) {
 
 		ObjectData data = {};
 		data.id = static_cast<unsigned>(object_ast.object_data + 1);
-		data.object_type = gen_object_type(object_name);
+		data.object_type = object_ast.is_scene ? gen_scene_type(object_name) : gen_object_type(object_name);
 		data.object_type.data.object_data = object_ast.object_data;
 
-		add_builtin_member(pc, data, "position", "vector");
-		add_builtin_member(pc, data, "size", "vector");
-		add_builtin_member(pc, data, "rotation", "float");
+		if (!object_ast.is_scene)
+			data.member_vars = builtin_object.member_vars;
 
 		add_builtin_function(pc, data, "update", "void", {});
 		add_builtin_function(pc, data, "render", "void", {});
@@ -81,6 +87,19 @@ void SemanticsContext::register_objects(ParserContext &pc) {
 		pc.object_type_smtb[object_name] = data.object_type;
 		pc.object_data.push_back(std::move(data));
 	}
+
+	Type &object_type = pc.primitive_type_smtb.at("object");
+	object_type.data.object_data = pc.object_data.size();
+	builtin_object.object_type = object_type;
+	pc.object_data.push_back(std::move(builtin_object));
+
+	Type &scene_type = pc.primitive_type_smtb.at("scene");
+	scene_type.data.object_data = pc.object_data.size();
+	ObjectData builtin_scene = {};
+	builtin_scene.object_type = scene_type;
+	add_builtin_function(pc, builtin_scene, "update", "void", {});
+	add_builtin_function(pc, builtin_scene, "render", "void", {});
+	pc.object_data.push_back(std::move(builtin_scene));
 
 	for (Node &node : pc.nodes) {
 		if (node.type != AST_Object) continue;
@@ -92,7 +111,8 @@ void SemanticsContext::register_objects(ParserContext &pc) {
 
 		Type parent_type = find_type(pc, object_ast.parent_name_tok.str);
 
-		if (parent_type.type_kind != TK_Object) panic("Parent must be an object.", pc.tc);
+		if (parent_type.type_kind != pc.object_data.at(object_ast.object_data).object_type.type_kind)
+			panic("Objects must extend objects and scenes must extend scenes.", pc.tc);
 
 		pc.object_data.at(object_ast.object_data).parent_type = std::move(parent_type);
 	}
@@ -133,6 +153,10 @@ std::size_t SemanticsContext::register_func_data(ParserContext &pc, const Token 
 		if (existing != object_data.member_funcs.end()) {
 			if (!existing->second.is_builtin || is_constructor)
 				panic("Duplicate member function: " + data.func_name, pc.tc);
+			if (is_scene_reference(object_data.object_type) &&
+				(data.arg_count != existing->second.arg_count ||
+				 data.return_type.type_str != existing->second.return_type.type_str))
+				panic("Scene update and render must have no arguments and return void.", pc.tc);
 			data.symbol_id = existing->second.symbol_id;
 			data.id = existing->second.id;
 			pc.func_data.at(data.symbol_id) = data;
@@ -219,18 +243,21 @@ void SemanticsContext::layout_object(ParserContext &pc, std::size_t object_id, s
 	state[object_id] = 1;
 
 	ObjectData &object_data = pc.object_data.at(object_id);
-	unsigned offset = 0; // position (float * 3), size (float * 3), rotation (float)
+	const ObjectData &builtin_object = pc.object_data.at(find_type(pc, "object").data.object_data);
+	unsigned offset = is_scene_reference(object_data.object_type) ? 0 : builtin_object.instance_size;
 
 	if (!object_data.parent_type.type_str.empty()) {
 		std::size_t parent_id = object_data.parent_type.data.object_data;
 		layout_object(pc, parent_id, state);
-		offset += pc.object_data.at(parent_id).instance_size;
+		offset = pc.object_data.at(parent_id).instance_size;
 	}
 
 	// Symbol IDs follow declaration order; hash-table iteration does not define layout.
 	for (VarData &var_data : pc.var_data) {
 		auto member = object_data.member_vars.find(var_data.var_name);
 		if (member == object_data.member_vars.end() || member->second.symbol_id != var_data.symbol_id) continue;
+		const auto builtin = builtin_object.member_vars.find(var_data.var_name);
+		if (builtin != builtin_object.member_vars.end() && builtin->second.symbol_id == var_data.symbol_id) continue;
 		var_data.offset = offset;
 		offset = add_size(pc, offset, var_data.type.nbyte);
 		member->second = var_data;
@@ -293,17 +320,23 @@ void SemanticsContext::close_scope() {
 void SemanticsContext::register_local_var_data(ParserContext &pc, VarDeclAST &var_decl) {
 	Scope &scope = scopes.at(current_scope);
 	const std::string &name = var_decl.var_name_tok.str;
+
 	if (scope.local_var_smtb.contains(name)) panic("Duplicate local variable: " + name, pc.tc);
+
 	VarData data = {};
 	data.symbol_id = pc.var_data.size();
 	data.id = static_cast<unsigned>(scope.local_var_smtb.size() + 1);
 	data.var_name = name;
 	data.type = find_type(pc, var_decl.var_type_tok.str);
+
 	if (data.type.type_str == "void") panic("Variable cannot have void type.", pc.tc);
+
 	data.scope_data = ScopeLocal;
 	data.offset = stack_offset;
+
 	stack_offset = add_size(pc, stack_offset, data.type.nbyte);
 	var_decl.var_data = data.symbol_id;
+
 	scope.local_var_smtb[name] = data;
 	declared_local_vars.push_back(data.symbol_id);
 	pc.var_data.push_back(std::move(data));
@@ -364,7 +397,9 @@ void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &ex
 		return;
 	if (actual.type_kind == TK_Object && expected.type_str == "object")
 		return;
-	if (actual.type_kind == TK_Null && (is_object_reference(expected) ||
+	if (actual.type_kind == TK_Scene && expected.type_str == "scene")
+		return;
+	if (actual.type_kind == TK_Null && (is_instance_reference(expected) ||
 		expected.type_str == "string" || expected.type_str == "window"))
 		return;
 	const auto scalar = [](const Type &type) {
@@ -372,7 +407,7 @@ void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &ex
 		};
 	if (scalar(actual) && (scalar(expected) || expected.type_str == "vector"))
 		return;
-	while (actual.type_kind == TK_Object && actual.type_str != expected.type_str)
+	while ((actual.type_kind == TK_Object || actual.type_kind == TK_Scene) && actual.type_str != expected.type_str)
 		actual = pc.object_data.at(actual.data.object_data).parent_type;
 	if (actual.type_str != expected.type_str)
 		panic("Incompatible value type: expected " + expected.type_str + ".", pc.tc);
@@ -470,20 +505,6 @@ void SemanticsContext::bind_super_method(ParserContext &pc, FuncCallAST &call) c
 void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node) {
 	if (node.attr == NoNode) return;
 
-	if (type_of_node.type_str == "object") {
-		Node &member = pc.get_node(node.attr);
-
-		if (member.type == AST_FunctionCall) { // for attr call from object, it should be super() or attr_syscall
-			FuncCallAST &call = std::get<FuncCallAST>(member.ast);
-
-			if (call.is_super_method)
-				panic("super.method() cannot have an explicit object receiver.", pc.tc);
-			if (check_attr_syscall(pc, call, member))
-				return;
-		}
-
-		panic("Cast object to a concrete type before accessing members.", pc.tc);
-	}
 	if (type_of_node.type_str == "vector") {
 		Node &component = pc.get_node(node.attr);
 		if (component.type != AST_Identifier)
@@ -496,7 +517,8 @@ void SemanticsContext::resolve_attr(ParserContext &pc, const Type &type_of_node,
 		resolve_attr(pc, find_type(pc, "float"), component);
 		return;
 	}
-	if (type_of_node.type_kind != TK_Object) panic("Attribute access requires an object type.", pc.tc);
+
+	if (!is_instance_reference(type_of_node)) panic("Attribute access requires an object or scene type.", pc.tc);
 	register_attr_data(pc, type_of_node.data.object_data, pc.get_node(node.attr));
 }
 
@@ -707,7 +729,7 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 			const bool logical = bin_expr_ast.op_type == OpAND || bin_expr_ast.op_type == OpOR;
 			const bool equality = bin_expr_ast.op_type == OpEQUAL || bin_expr_ast.op_type == OpNOTEQUAL;
 			const auto reference = [](const Type &type) {
-				return is_object_reference(type) ||
+				return is_instance_reference(type) ||
 					type.type_str == "string" || type.type_str == "window" || type.type_kind == TK_Null;
 				};
 			if (numeric(lhs) && numeric(rhs)) {
@@ -750,7 +772,8 @@ void SemanticsContext::check_semantics(ParserContext &pc, Node &node) {
 	case AST_New: {
 		NewAST &new_ast = std::get<NewAST>(node.ast);
 		Type type = find_type(pc, new_ast.name_tok.str);
-		if (type.type_kind != TK_Object) panic("new requires an object.", pc.tc);
+		if (type.type_kind != TK_Object && type.type_kind != TK_Scene)
+			panic("new requires an object or scene.", pc.tc);
 		new_ast.object_data = type.data.object_data;
 		const FuncData &constructor = pc.object_data.at(new_ast.object_data).constructor;
 		if (new_ast.params.size() != (constructor.is_constructor ? constructor.arg_count : 0))

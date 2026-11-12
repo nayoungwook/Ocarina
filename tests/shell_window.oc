@@ -1,4 +1,0 @@
-func main(): void {
-    var win: window = window("Ocarina shell integration test", 320, 240);
-    print("WINDOW_SCRIPT_DONE\n");
-}

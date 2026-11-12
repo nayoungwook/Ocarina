@@ -250,7 +250,7 @@ void IRLoader::read_meta_block(OVM &vm, unsigned owner) {
 		return;
 	}
 
-	if (kind == META_OBJECT) {
+	if (kind == META_OBJECT || kind == META_SCENE) {
 		if (owner != 0)
 			reader_error("nested object metadata");
 
@@ -266,6 +266,7 @@ void IRLoader::read_meta_block(OVM &vm, unsigned owner) {
 		data.name = name;
 		data.parent_id = parent_id;
 		data.size = size;
+		data.is_scene = kind == META_SCENE;
 		data.initializer.name = "<initializer>";
 		vm.object_data.emplace(id, std::move(data));
 		while (peek_byte() != META_TERM) read_meta_block(vm, id);
@@ -560,29 +561,29 @@ void IRLoader::read_rodata(OVM &vm) {
 		reader_error("unexpected data after rodata");
 }
 
-static bool valid_strings(const VMFunctionData &data, const VMStringPool &pool) {
+static bool valid_strings(const VMFunctionData &data, const OVM &vm) {
 	for (const VMInstruction &instruction : data.instructions)
 		if (instruction.opcode == OP_LOAD_STR &&
-			!pool.str_pool.contains(instruction.operands.u32[0]))
+			!vm.vm_string_pool.str_pool.contains(instruction.operands.u32[0]))
 			return false;
 
 	return true;
 }
 
 void IRLoader::validate_strings(const OVM &vm) const {
-	if (!valid_strings(vm.initializer, vm.vm_string_pool))
+	if (!valid_strings(vm.initializer, vm))
 		reader_error("undefined string id");
 
 	for (const auto &[id, data] : vm.function_data)
-		if (!valid_strings(data, vm.vm_string_pool))
+		if (!valid_strings(data, vm))
 			reader_error("undefined string id");
 
 	for (const auto &[id, object] : vm.object_data) {
-		if (!valid_strings(object.initializer, vm.vm_string_pool))
+		if (!valid_strings(object.initializer, vm))
 			reader_error("undefined string id");
 
 		for (const auto &[function_id, data] : object.function_data)
-			if (!valid_strings(data, vm.vm_string_pool))
+			if (!valid_strings(data, vm))
 				reader_error("undefined string id");
 	}
 }
@@ -598,9 +599,14 @@ void IRLoader::read_ir_files(OVM &vm, std::vector<IRLoader> &readers) {
 		reader.function_code.clear();
 		reader.read_meta(loaded);
 	}
-	for (const auto &[id, object] : loaded.object_data)
-		if (object.parent_id != 0 && !loaded.object_data.contains(object.parent_id))
+	for (const auto &[id, object] : loaded.object_data) {
+		if (object.parent_id == 0) continue;
+		const auto parent = loaded.object_data.find(object.parent_id);
+		if (parent == loaded.object_data.end())
 			throw OVMPanic("IR load error: undefined parent object id.");
+		if (parent->second.is_scene != object.is_scene)
+			throw OVMPanic("IR load error: objects and scenes cannot inherit from each other.");
+	}
 	for (IRLoader &reader : readers) {
 		reader.read_code(loaded);
 		reader.read_rodata(loaded);

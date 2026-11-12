@@ -16,6 +16,7 @@ void OVM::clear_execution() {
 	frames.clear();
 	vm_stack.clear();
 	hierarchy.reset();
+	current_scene = 0;
 	globals = {};
 	stack_size = 0;
 	syscalls.reset();

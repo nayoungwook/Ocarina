@@ -19,6 +19,7 @@ void TokenizerContext::init_keyword() {
 	insert_keyword("return", TokenType::TokReturn);
 	insert_keyword("else", TokenType::TokElse);
 	insert_keyword("object", TokenType::TokObject);
+	insert_keyword("scene", TokenType::TokScene);
 	insert_keyword("extends", TokenType::TokExtends);
 	insert_keyword("private", TokenType::TokPrivate);
 	insert_keyword("public", TokenType::TokPublic);

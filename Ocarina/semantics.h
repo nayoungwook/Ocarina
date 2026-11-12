@@ -48,7 +48,3 @@ private:
 	void register_attr_data(ParserContext &pc, std::size_t attr_of, Node &node);
 	void resolve_attr(ParserContext &pc, const Type &type_of_node, Node &node);
 };
-
-static void add_builtin_member(ParserContext &pc, ObjectData &object,
-	const std::string &name,
-	const std::string &type_name);

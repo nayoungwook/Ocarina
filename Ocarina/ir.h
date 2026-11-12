@@ -3,7 +3,6 @@
 #include "semantics.h"
 
 #include <cstdint>
-#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -30,6 +29,7 @@
 // META_CONSTRUCTOR func_id(uint) func_str(char*)
 #define META_CONSTRUCTOR 0X07
 #define META_IMPORT 0x08 // required bytecode path, relative to this bytecode file
+#define META_SCENE 0x09 // same layout as META_OBJECT, without spatial builtins
 
 #define CODE_BEGIN 0x51 // begining of code section
 #define CODE_END 0x52
@@ -171,8 +171,8 @@ private:
 	void gen_func_metadata(const FuncData &fd, const std::vector<std::size_t> &declared_vars);
 	void gen_var_metadata(const VarData &vd);
 	void gen_object_metadata(const ObjectAST &object_ast);
-	void gen_metadata(std::span<const Node> nodes, const std::vector<std::string> &imports);
-	void gen_unit(std::span<const Node> nodes, const std::vector<std::string> &imports);
+	void gen_metadata(const std::vector<Node> &nodes, const std::vector<std::string> &imports);
+	void gen_unit(const std::vector<Node> &nodes, const std::vector<std::string> &imports);
 	void gen_global_metadata(const Node &node);
 	unsigned get_total_stack_size_of_func(const std::vector<std::size_t> &declared_vars) const;
 	RODATA_Str add_str_rodata(const std::string &str);

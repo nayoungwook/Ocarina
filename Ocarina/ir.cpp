@@ -88,7 +88,7 @@ void IRContext::gen_var_metadata(const VarData &vd) {
 
 void IRContext::gen_object_metadata(const ObjectAST &object_ast) {
 	const ObjectData &cd = pc.object_data.at(object_ast.object_data);
-	emit_byte(META_OBJECT);
+	emit_byte(object_ast.is_scene ? META_SCENE : META_OBJECT);
 	emit_int(cd.id);
 	emit_str(cd.object_type.type_str);
 	emit_int(cd.parent_type.type_str.empty()
@@ -122,12 +122,13 @@ void IRContext::gen_global_metadata(const Node &node) {
 	if (node.type == AST_VariableDeclarationBundle) {
 		for (const Node &declaration : std::get<VarDeclBundleAST>(node.ast).var_decls)
 			gen_global_metadata(declaration);
-	} else if (node.type == AST_VariableDeclaration) {
+	}
+	else if (node.type == AST_VariableDeclaration) {
 		gen_var_metadata(pc.var_data.at(std::get<VarDeclAST>(node.ast).var_data));
 	}
 }
 
-void IRContext::gen_metadata(std::span<const Node> nodes, const std::vector<std::string> &imports) {
+void IRContext::gen_metadata(const std::vector<Node> &nodes, const std::vector<std::string> &imports) {
 	emit_byte(META_BEGIN);
 
 	for (const std::string &path : imports) {
@@ -153,13 +154,13 @@ const std::vector<byte> &IRContext::get_bytes() const {
 	return bytes;
 }
 
-unsigned
-IRContext::get_total_stack_size_of_func(const std::vector<std::size_t> &declared_vars) const {
+unsigned IRContext::get_total_stack_size_of_func(const std::vector<std::size_t> &declared_vars) const {
 	unsigned stack_size = 0;
 	for (std::size_t id : declared_vars) {
 		const VarData &var_data = pc.var_data.at(id);
 		if (var_data.type.nbyte > std::numeric_limits<unsigned>::max() - var_data.offset)
 			panic("Function stack size overflow.", pc.tc);
+
 		unsigned end = var_data.offset + var_data.type.nbyte;
 		if (end > stack_size)
 			stack_size = end;
@@ -297,7 +298,8 @@ void IRContext::gen_ident_ir(const Node &node, bool value_required) {
 	if (ident_ast.vector_component >= 0) {
 		emit_byte(OP_VECTOR_COMPONENT);
 		emit_int(static_cast<unsigned>(ident_ast.vector_component));
-	} else
+	}
+	else
 		gen_ident_load_ir(pc.var_data.at(ident_ast.var_data), ident_ast.is_attr);
 	if (node.attr != NoNode)
 		gen_child_ir(node.attr, value_required);
@@ -386,7 +388,7 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 }
 
 void IRContext::gen_zero(const Type &type) {
-	if (is_object_reference(type) ||
+	if (is_instance_reference(type) ||
 		type.type_str == "string" || type.type_str == "window")
 		emit_byte(OP_PUSH_NULL);
 	else if (type.type_str == "float") {
@@ -534,7 +536,8 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			emit_byte(OP_EXPR_OP);
 			emit_byte(node.type == AST_IdentDecrease ? OP_SUB : OP_ADD);
 			gen_target_save_ir(target);
-		} else if (node.type == AST_IdentDecrease)
+		}
+		else if (node.type == AST_IdentDecrease)
 			gen_ident_decre_ir(var_data, target.is_attr);
 		else
 			gen_ident_incre_ir(var_data, target.is_attr);
@@ -570,7 +573,7 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			const IdentifierAST target = gen_assignment_target(left);
 			const VarData &var_data = pc.var_data.at(target.var_data);
 			const Type type = target.vector_component >= 0 ? find_type(pc, "float") : var_data.type;
-			
+
 			if (compound) {
 				if (target.is_attr) {
 					// Keep the evaluated receiver for the store.
@@ -581,7 +584,7 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			}
 
 			gen_child_ir(bin_expr_ast.right);
-			
+
 			if (compound) {
 				emit_byte(OP_EXPR_OP);
 				emit_byte(get_op_byte(bin_expr_ast.op_type));
@@ -590,9 +593,9 @@ void IRContext::gen_node_ir(const Node &node, bool value_required) {
 			}
 			else
 				gen_conversion(semantics.infer_type(pc, pc.get_node(bin_expr_ast.right)), type);
-			
+
 			gen_target_save_ir(target);
-			
+
 			if (value_required)
 				gen_ident_load_ir(var_data, false);
 		}
@@ -789,7 +792,7 @@ void IRContext::gen_rodata() {
 	emit_byte(RODATA_END);
 }
 
-void IRContext::gen_unit(std::span<const Node> nodes, const std::vector<std::string> &imports) {
+void IRContext::gen_unit(const std::vector<Node> &nodes, const std::vector<std::string> &imports) {
 	gen_metadata(nodes, imports);
 	emit_byte(CODE_BEGIN);
 	for (const Node &node : nodes) gen_node_ir(node);
@@ -831,8 +834,10 @@ std::vector<IRFile> IRContext::gen_files(ParserContext input_pc) {
 		std::vector<std::string> imports;
 		for (const std::string &dependency : source.imports)
 			imports.push_back(bytecode_import(source.path, dependency));
-		gen_unit(std::span<const Node>(pc.nodes).subspan(source.first_node, source.node_count), imports);
-		files.push_back({source.path, std::move(bytes)});
+		const auto first = pc.nodes.begin() + source.first_node;
+		const std::vector<Node> nodes(first, first + source.node_count);
+		gen_unit(nodes, imports);
+		files.push_back({ source.path, std::move(bytes) });
 	}
 	return files;
 }

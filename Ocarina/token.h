@@ -60,6 +60,7 @@ enum class TokenType {
 
 	TokElse,
 	TokObject,
+	TokScene,
 	TokExtends,
 
 	TokPrivate,

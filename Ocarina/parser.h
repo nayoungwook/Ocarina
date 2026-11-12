@@ -119,6 +119,9 @@ private:
 	void register_syscall(const std::string &func_name, const std::string &ret_type,
 		unsigned id, bool is_varargs);
 	void init_window_syscall();
+	void init_texture_syscall();
+	void init_render_texture_syscall();
+	void init_set_scene_syscall();
 	void init_syscall();
 
 	template<class T>
@@ -162,7 +165,7 @@ private:
 
 	void pass_body();
 	void pass_func_param();
-	void parse_object_structure();
+	void parse_object_structure(bool is_scene);
 	void parse_func_structure();
 	void parse_constructor_structure();
 	void parse_var_structure();

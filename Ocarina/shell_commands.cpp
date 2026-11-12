@@ -41,7 +41,7 @@ void compile_sources(const std::vector<std::string> &command) {
 		const std::string path = utf8_path(output);
 		const std::string bytes(file.bytes.begin(), file.bytes.end());
 		if (std::filesystem::exists(output) && read_file(path) == bytes) continue;
-		write_file(path, std::span<const byte>(file.bytes));
+		write_file(path, file.bytes);
 	}
 }
 

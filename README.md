@@ -82,8 +82,32 @@ IR은 Ocarina 단일 형식이며 API에서 형식을 선택하지 않습니다.
 기존 형식의 `.cb` 파일은 소스에서 다시 컴파일해야 합니다.
 ## 언어와 메모리
 
-언어 키워드는 `object`이며 함수, 생성자, 상속, 전역·지역·멤버 변수, 조건문과 반복문을 지원합니다.
+언어 키워드는 `object`, `scene`이며 함수, 생성자, 상속, 전역·지역·멤버 변수, 조건문과 반복문을 지원합니다.
 `new Object(...)`, 재귀 호출, 숫자·문자열·bool·null과 벡터 연산을 사용할 수 있습니다.
+
+`scene`은 생성자·멤버·상속을 지원하며 기본 `update():void`, `render():void`를 가집니다.
+`position`, `size`, `rotation`, `width`, `height` 같은 공간 속성을 자동으로 추가하지 않습니다.
+모든 구체적인 씬을 공통 `scene` 타입의 변수·인자·반환값으로 사용할 수 있습니다.
+씬은 씬만 상속할 수 있으며, `object`와 `scene` 사이의 대입·캐스트·상속은 허용하지 않습니다.
+`set_scene(scene)`은 syscall 5번이며 VM 인스턴스마다 활성 씬 하나를 저장합니다.
+활성 씬에만 고정 업데이트마다 `update()`를, 렌더 프레임마다 `render()`를 호출한 뒤 기존 일반 객체를 순회합니다.
+씬 교체는 다음 콜백부터 반영되며 재실행·프로그램 초기화 시 활성 씬 참조를 지웁니다. `null` 등록은 실행 오류입니다.
+VM 창은 스크립트의 렌더링 명령을 모으고 화면에 출력할 엔진 렌더 큐를 함께 준비합니다.
+
+```text
+scene MainScene {
+    var ticks:int = 0;
+
+    func update():void { ticks++; }
+    func render():void {}
+}
+
+func main():void {
+    window("Scene", 800, 600);
+    var current:scene = new MainScene();
+    set_scene(current);
+}
+```
 
 벡터의 `x`, `y`, `z` 성분은 `float`이며 `v.x`, `object.position.y`처럼 읽을 수 있습니다.
 변수에 저장된 벡터의 성분에는 `=`, 복합 대입, `++`, `--`를 문장으로 사용할 수 있습니다.
@@ -131,7 +155,9 @@ func main():void {
 `obj.get_child(index)`는 현재 자식 목록의 0부터 시작하는 순서로 조회하며, 객체 내부에서는 `get_child(index)`로 호출할 수 있습니다.
 인덱스는 숫자 하나를 받아 기존 숫자 변환 규칙에 따라 `int`로 변환합니다. 음수·범위 초과·null 수신 객체는 실행 오류입니다.
 반환 타입 `object`는 공통 객체 참조입니다. 변수·매개변수·반환값으로 사용할 수 있고, 모든 구체적인 객체 타입을 담을 수 있습니다.
-구체적인 멤버에 접근하려면 `cast<Item>(obj.get_child(0))`처럼 캐스트합니다. `object` 참조에서는 `add_child`·`get_child`를 직접 호출할 수 있습니다.
+`object` 참조에서도 공통 멤버 `position`·`size`·`rotation`을 읽고 수정할 수 있습니다. 예: `obj.get_child(0).position.x += 1;`
+공통 멤버는 구체적인 타입·부모 타입·`object` 참조에서 같은 저장 공간을 사용합니다.
+사용자 정의 멤버에 접근하려면 `cast<Item>(obj.get_child(0))`처럼 캐스트합니다. `object` 참조에서는 `add_child`·`get_child`·`child_size`를 직접 호출할 수 있습니다.
 GC, 개별 객체 해제와 자식 분리 API는 구현하지 않습니다. 전체 hierarchy는 실행 상태 초기화 시 정리합니다.
 기존 배열 타입·리터럴·인덱싱과 `push`, `remove`, `length`는 제거했습니다. 이를 사용하던 소스는 객체 계층 구조로 변경해야 합니다.
 
@@ -178,6 +204,7 @@ load/save의 암시적 변환에 의존하던 기존 `.cb` 파일은 소스에�
 | `print(...)` | void | 인자 순서대로 출력 |
 | `vector(...)` | vector | 숫자 성분을 최대 세 개 받아 벡터 생성 |
 | `window(string, int, int)` | window | SDL 창 생성 |
+| `set_scene(scene)` | void | 활성 씬 등록·교체 (syscall 5) |
 
 내장 함수는 일반 함수 목록과 분리한 `syscall_smtb`에 등록합니다. `sys_gc`는 포함하지 않습니다.
 `window()`로 만든 창은 스크립트의 `main` 실행 후 셸의 엔진 루프에서 갱신합니다.

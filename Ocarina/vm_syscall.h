@@ -4,7 +4,7 @@
 
 #include <iosfwd>
 #include <optional>
-#include <span>
+#include <vector>
 
 class OVM;
 
@@ -31,15 +31,18 @@ public:
 	SyscallContext &operator=(const SyscallContext &) = delete;
 
 	std::optional<VMOperand> handle_syscall(unsigned id,
-		std::span<const VMOperand> arguments,
-		const VMStringPool &vm_string_pool,
+		const std::vector<VMOperand> &arguments,
 		std::ostream &out);
 
 private:
-	void print(std::span<const VMOperand> arguments,
-		const VMStringPool &vm_string_pool,
+	void print(const std::vector<VMOperand> &arguments,
 		std::ostream &out) const;
-	VMOperand vector(std::span<const VMOperand> arguments) const;
-	VMOperand window(std::span<const VMOperand> arguments, const VMStringPool &vm_string_pool);
+	
+	VMOperand vector(const std::vector<VMOperand> &arguments) const;
+	VMOperand window(const std::vector<VMOperand> &arguments);
+	VMOperand texture(const std::vector<VMOperand> &arguments);
+	void render_texture(const std::vector<VMOperand> &arguments);
+	void set_scene(const std::vector<VMOperand> &arguments);
+	
 	OVM &vm;
 };

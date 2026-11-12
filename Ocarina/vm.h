@@ -24,6 +24,7 @@ public:
 	std::optional<VMOperand> run(std::ostream &out, RunMode mode = RunMode::WaitForWindow);
 	void update_hierarchy();
 	void render_hierarchy();
+	void set_scene(const VMOperand &scene);
 
 	std::unordered_map<std::string, std::vector<byte>> byte_files;
 
@@ -35,16 +36,20 @@ public:
 
 	unsigned main_func_id = std::numeric_limits<unsigned>::max();
 
-	Engine engine{this};
+	Engine engine{ this };
+
+	std::unordered_map<std::string, Texture *> texture_pool;
 
 private:
 	std::vector<VMOperand> vm_stack;
 	std::deque<VMFrame> frames;
 	VMHierarchy hierarchy;
+	unsigned current_scene = 0;
 	VMStorage globals;
 	std::size_t stack_size = 0;
 	std::optional<SyscallContext> syscalls;
 	std::optional<std::reference_wrapper<std::ostream>> output;
+
 
 	void clear_execution();
 	void vm_stack_push(VMOperand operand);
@@ -57,6 +62,7 @@ private:
 	std::optional<VMOperand> vm_exec_function(const VMFunctionData &function_data,
 		unsigned hierarchy_index = 0);
 	void exec_hierarchy(std::string_view method);
+	void exec_instance_method(unsigned hierarchy_index, std::string_view method);
 	void exec_instruction(const VMInstruction &instruction,
 		std::size_t &instruction_index,
 		VMFrame &frame,

@@ -43,12 +43,14 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 		break;
 	case OP_SYSCALL: {
 		const auto operands = update_function_arguments(arguments[1]);
+
 		const auto result = syscalls->handle_syscall(arguments[0],
 			operands,
-			this->vm_string_pool,
 			output->get());
+
 		if (result)
 			vm_stack_push(*result);
+
 		break;
 	}
 	case OP_CALL:

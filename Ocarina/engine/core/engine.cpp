@@ -15,6 +15,16 @@
 #include <algorithm>
 #include <utility>
 
+namespace {
+class VMRenderScene final : public Scene {
+public:
+	explicit VMRenderScene(Engine *engine) : Scene(engine) {}
+	void init() override {}
+	void update() override {}
+	void render() override {}
+};
+}
+
 Engine::~Engine() {
 	shutdown();
 }
@@ -22,6 +32,8 @@ Engine::~Engine() {
 void Engine::shutdown() {
 	after_scene_update = {};
 	current_scene = nullptr;
+	delete vm_render_scene;
+	vm_render_scene = nullptr;
 	current_framebuffer = nullptr;
 	lights.clear();
 	delete renderer;
@@ -78,6 +90,10 @@ void Engine::init_window(const std::string &title, int width, int height) {
 		shader_manager->fetch_shader(
 			"model", new Shader("engine_shaders/model.vert", "engine_shaders/model.frag"));
 		renderer = new Renderer(this, camera, shader_manager->get_shader("sprite"));
+		if (vm != nullptr) {
+			vm_render_scene = new VMRenderScene(this);
+			set_scene(vm_render_scene);
+		}
 		this->width = static_cast<float>(width);
 		this->height = static_cast<float>(height);
 	} catch (...) {

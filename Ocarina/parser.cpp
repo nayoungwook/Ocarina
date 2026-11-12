@@ -20,9 +20,11 @@ void ParserContext::init_primitive() {
 	primitive_type_smtb["void"] = gen_primitive_type("void", 0);
 	primitive_type_smtb["null"] = gen_null_type();
 	primitive_type_smtb["object"] = gen_primitive_type("object", 8);
+	primitive_type_smtb["scene"] = gen_primitive_type("scene", 8);
 	primitive_type_smtb["string"] = gen_primitive_type("string", 8);
 	primitive_type_smtb["vector"] = gen_primitive_type("vector", 4 * 3);
 	primitive_type_smtb["window"] = gen_primitive_type("window", 8);
+	primitive_type_smtb["texture"] = gen_primitive_type("texture", 8);
 }
 
 ParserContext::ParserContext() {
@@ -55,7 +57,7 @@ NodeId ParserContext::store_node(struct Node node) {
 }
 
 Token ParserContext::parse_type_token() {
-	if (tc.peek().type == TokenType::TokObject)
+	if (tc.peek().type == TokenType::TokObject || tc.peek().type == TokenType::TokScene)
 		return tc.pull();
 	return tc.consume(TokenType::TokIdent);
 }
@@ -343,6 +345,7 @@ struct Node ParserContext::gen_ret_node(const struct Token &first) {
 
 struct Node ParserContext::gen_object_decl_node(const struct Token &first) {
 	struct ObjectAST object_ast = {};
+	object_ast.is_scene = first.type == TokenType::TokScene;
 
 	struct Token name_tok = tc.consume(TokenType::TokIdent);
 	object_ast.name_tok = name_tok;
@@ -546,7 +549,8 @@ struct Node ParserContext::parse_stmt() {
 		return gen_constructor_node(first);
 	}
 
-	case TokenType::TokObject: {
+	case TokenType::TokObject:
+	case TokenType::TokScene: {
 		tc.pull();
 		return gen_object_decl_node(first);
 	}
@@ -891,11 +895,11 @@ void ParserContext::pass_func_param() {
 	if (paren_counter != 0) panic("Expected closing parenthesis.", tc);
 }
 
-void ParserContext::parse_object_structure() {
+void ParserContext::parse_object_structure(bool is_scene) {
 	ParserContext &pc = *this;
 	struct Token object_name_tok = tc.consume(TokenType::TokIdent);
 	const std::string &object_name = object_name_tok.str;
-	struct Type object_type = gen_object_type(object_name);
+	struct Type object_type = is_scene ? gen_scene_type(object_name) : gen_object_type(object_name);
 	pc.object_type_smtb[object_name] = object_type;
 	if (tc.peek().type == TokenType::TokExtends) {
 		tc.consume(TokenType::TokExtends);
@@ -983,8 +987,9 @@ void ParserContext::parse_structure() {
 	struct Token first = tc.pull();
 
 	switch (first.type) {
-	case TokenType::TokObject: {
-		parse_object_structure();
+	case TokenType::TokObject:
+	case TokenType::TokScene: {
+		parse_object_structure(first.type == TokenType::TokScene);
 		break;
 	}
 
@@ -1005,7 +1010,7 @@ void ParserContext::parse_structure() {
 
 	default: {
 		panic("Unexpected token, block of source code must begin with "
-			"object or "
+			"object, scene or "
 			"function.",
 			tc);
 	}

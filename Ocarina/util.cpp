@@ -36,7 +36,7 @@ void write_file(const std::string &path, std::string_view data) {
 	if (!fp) throw OVMPanic("Failed to write file : " + path);
 }
 
-void write_file(const std::string &path, std::span<const std::uint8_t> data) {
+void write_file(const std::string &path, const std::vector<std::uint8_t> &data) {
 	if (data.empty()) write_file(path, std::string_view{});
 	else write_file(path, std::string_view(reinterpret_cast<const char *>(data.data()), data.size()));
 }

@@ -14,12 +14,5 @@ void SemanticsContext::check_syscall(ParserContext &pc, const FuncCallAST &func_
 			if (type.type_kind != TK_Numeric && type.type_str != "bool" && type.type_str != "char")
 				panic("vector components must be numeric.", pc.tc);
 		}
-	} else if (func_data.func_name == "window") {
-		for (std::size_t i = 0; i < func_data.arg_types.size(); ++i) {
-			Type type = infer_type(pc, func_call_ast.params.at(i));
-
-			if (type.type_str != func_data.arg_types[i].type_str)
-				panic("window expects (string, int, int).", pc.tc);
-		}
 	}
 }

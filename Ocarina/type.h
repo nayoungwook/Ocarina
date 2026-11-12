@@ -15,7 +15,7 @@ union TypeData {
 };
 
 enum TypeKind {
-	TK_Numeric, TK_Object, TK_Primitive, TK_Null
+	TK_Numeric, TK_Object, TK_Primitive, TK_Null, TK_Scene
 };
 
 struct Type {
@@ -31,7 +31,10 @@ struct NumericData gen_numeric_data(unsigned rank, bool is_signed, bool is_integ
 struct Type gen_primitive_type(const std::string &type_str, unsigned nbyte);
 struct Type gen_numeric_type(const std::string &type_str, unsigned nbyte, struct NumericData numeric_data);
 struct Type gen_object_type(const std::string &type_str);
+Type gen_scene_type(const std::string &type_str);
 struct Type gen_null_type();
 struct Type find_type(const ParserContext &pc, const std::string &type_str);
 bool is_castable(const ParserContext &pc, const Type &source, const Type &target);
 bool is_object_reference(const Type &type);
+bool is_scene_reference(const Type &type);
+bool is_instance_reference(const Type &type);

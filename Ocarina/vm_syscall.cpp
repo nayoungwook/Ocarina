@@ -28,15 +28,14 @@ static float numeric_operand_to_float(const VMOperand &operand) {
 SyscallContext::SyscallContext(OVM &vm) : vm(vm) {
 }
 
-void SyscallContext::print(std::span<const VMOperand> arguments,
-	const VMStringPool &vm_string_pool,
+void SyscallContext::print(const std::vector<VMOperand> &arguments,
 	std::ostream &out) const {
 	std::ostringstream text;
 
 	for (const VMOperand &op : arguments) {
 		switch (op.op_type) {
 		case VMOPType::OPRND_String:
-			text << vm_string_pool.str_pool.at(static_cast<unsigned>(op.val.i32));
+			text << vm.vm_string_pool.str_pool.at(static_cast<unsigned>(op.val.i32));
 			break;
 
 		case VMOPType::OPRND_INT32:
@@ -55,6 +54,10 @@ void SyscallContext::print(std::span<const VMOperand> arguments,
 
 		case VMOPType::OPRND_FLOAT64:
 			text << op.val.f64;
+			break;
+
+		case VMOPType::OPRND_TEXTURE:
+			text << "Texture : " << vm.vm_string_pool.str_pool.at(op.val.i32);
 			break;
 
 		case VMOPType::OPRND_VEC:
@@ -79,10 +82,7 @@ void SyscallContext::print(std::span<const VMOperand> arguments,
 	out << text.str();
 }
 
-VMOperand SyscallContext::vector(std::span<const VMOperand> arguments) const {
-	if (arguments.size() > 3)
-		throw OVMPanic("vector accepts at most three components.");
-
+VMOperand SyscallContext::vector(const std::vector<VMOperand> &arguments) const {
 	VMOperand result;
 	result.op_type = VMOPType::OPRND_VEC;
 	result.val = VMNumericValue{};
@@ -93,18 +93,12 @@ VMOperand SyscallContext::vector(std::span<const VMOperand> arguments) const {
 	return result;
 }
 
-VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
-	const VMStringPool &vm_string_pool) {
-	if (arguments.size() != 3 || arguments[0].op_type != VMOPType::OPRND_String ||
-		arguments[1].op_type != VMOPType::OPRND_INT32 ||
-		arguments[2].op_type != VMOPType::OPRND_INT32)
-		throw OVMPanic("window expects (string, int, int).");
-
+VMOperand SyscallContext::window(const std::vector<VMOperand> &arguments) {
 	VMOperand result;
 	result.op_type = VMOPType::OPRND_ADDRESS;
 
 	const std::string &title =
-		vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
+		vm.vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
 	const int width = arguments[1].val.i32;
 	const int height = arguments[2].val.i32;
 
@@ -114,20 +108,62 @@ VMOperand SyscallContext::window(std::span<const VMOperand> arguments,
 	return result;
 }
 
+VMOperand SyscallContext::texture(const std::vector<VMOperand> &arguments) {
+	VMOperand result;
+
+	result.op_type = VMOPType::OPRND_TEXTURE;
+
+	const std::string &path = vm.vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
+
+	if (vm.texture_pool.find(path) == vm.texture_pool.end()) {
+		vm.texture_pool.insert(std::make_pair(path, new Texture(path)));
+	}
+
+	result.val.i32 = arguments[0].val.i32;
+
+	return result;
+}
+
+void SyscallContext::render_texture(const std::vector<VMOperand> &arguments) {
+
+	std::string tex_path = vm.vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
+
+	assert(vm.texture_pool.find(tex_path) != vm.texture_pool.end());
+
+	Vector pos = Vector(arguments[1].val.v[0], arguments[1].val.v[1]);
+	float width = arguments[2].val.f32;
+	float height = arguments[3].val.f32;
+
+	vm.engine.get_renderer()->render_image(vm.texture_pool[tex_path], pos, width, height);
+}
+
+void SyscallContext::set_scene(const std::vector<VMOperand> &arguments) {
+	vm.set_scene(arguments.at(0));
+}
+
 std::optional<VMOperand> SyscallContext::handle_syscall(unsigned id,
-	std::span<const VMOperand> arguments,
-	const VMStringPool &vm_string_pool,
+	const std::vector<VMOperand> &arguments,
 	std::ostream &out) {
 	switch (id) {
 	case 0:
-		print(arguments, vm_string_pool, out);
+		print(arguments, out);
 		return std::nullopt;
 
 	case 1:
 		return vector(arguments);
 
+	case 2:
+		return texture(arguments);
+
 	case 3:
-		return window(arguments, vm_string_pool);
+		return window(arguments);
+
+	case 4:
+		render_texture(arguments);
+		return std::nullopt;
+	case 5:
+		set_scene(arguments);
+		return std::nullopt;
 
 	default:
 		throw OVMPanic("Unknown syscall ID: " + std::to_string(id));

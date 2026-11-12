@@ -64,30 +64,40 @@ void OVM::render_hierarchy() {
 	exec_hierarchy("render");
 }
 
+void OVM::set_scene(const VMOperand &scene) {
+	if (scene.op_type == VMOPType::OPRND_NULL)
+		throw OVMPanic("set_scene requires a non-null scene reference.");
+	const VMHierarchyObject &instance = find_object(scene);
+	if (!object_data.at(instance.object_id).is_scene)
+		throw OVMPanic("set_scene requires a scene reference.");
+	current_scene = static_cast<unsigned>(scene.val.i32);
+}
+
+void OVM::exec_instance_method(unsigned hierarchy_index, std::string_view method) {
+	unsigned object_id = hierarchy.at(hierarchy_index).object_id;
+	for (std::size_t depth = 0; object_id != 0 && depth < object_data.size(); ++depth) {
+		const VMObjectData &object = object_data.at(object_id);
+		const auto function = std::find_if(object.function_data.begin(), object.function_data.end(),
+			[method](const auto &entry) { return !entry.second.is_constructor && entry.second.name == method; });
+		if (function != object.function_data.end()) {
+			vm_exec_function(function->second, hierarchy_index);
+			return;
+		}
+		object_id = object.parent_id;
+	}
+}
+
 void OVM::exec_hierarchy(std::string_view method) {
 	if (!syscalls || !frames.empty())
 		return;
 
 	const std::size_t count = hierarchy.size();
 	try {
+		if (current_scene != 0)
+			exec_instance_method(current_scene, method);
 		for (unsigned index = 1; index < count; ++index) {
-			unsigned object_id = hierarchy.at(index).object_id;
-
-			for (std::size_t depth = 0; object_id != 0 && depth < object_data.size(); ++depth) {
-				const VMObjectData &object = object_data.at(object_id);
-
-				// find function name method.
-				const auto function = std::find_if(object.function_data.begin(), object.function_data.end(),
-					[method](const auto &entry) { return !entry.second.is_constructor && entry.second.name == method; });
-
-				if (function != object.function_data.end()) {
-					vm_exec_function(function->second, index);
-					break;
-				}
-
-				// find parent.
-				object_id = object.parent_id;
-			}
+			if (!object_data.at(hierarchy.at(index).object_id).is_scene)
+				exec_instance_method(index, method);
 		}
 	}
 	catch (...) {

@@ -197,6 +197,7 @@ struct ConstructorAST {
 };
 
 struct ObjectAST {
+	bool is_scene = false;
 	std::vector<struct Node> body;
 
 	struct Token name_tok;
