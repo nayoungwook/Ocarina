@@ -8,7 +8,7 @@
 #include <utility>
 
 void OVM::clear() {
-	if (!frames.empty())
+	if (executing)
 		throw OVMPanic("Cannot clear a running OVM.");
 
 	engine.shutdown();
@@ -36,7 +36,7 @@ void OVM::register_bytecode(const std::string &path) {
 }
 
 void OVM::load_files() {
-	if (!frames.empty()) throw OVMPanic("Cannot load bytecode in a running OVM.");
+	if (executing) throw OVMPanic("Cannot load bytecode in a running OVM.");
 	auto readers = IRLoader::read_files(byte_files);
 	IRLoader::read_ir_files(*this, readers);
 	engine.shutdown();

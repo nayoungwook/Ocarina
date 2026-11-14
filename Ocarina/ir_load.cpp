@@ -431,6 +431,27 @@ void IRLoader::read_function(OVM &vm, unsigned owner) {
 
 	VMFunctionData &data = table.at(id);
 	data.instructions = read_function_code(vm);
+	for (const VMInstruction &instruction : data.instructions) {
+		if (instruction.opcode != OP_RENDER) continue;
+		if (owner == 0 || vm.object_data.at(owner).is_scene)
+			reader_error("OP_RENDER requires an object method");
+		const VMObjectData &object = vm.object_data.at(owner);
+		constexpr std::array<std::string_view, 5> names = { "texture", "position", "width", "height", "rotation" };
+		constexpr std::array<std::string_view, 5> types = { "texture", "vector", "float", "float", "float" };
+		constexpr std::array<unsigned, 5> sizes = { 8, 12, 4, 4, 4 };
+		for (std::size_t i = 0; i < names.size(); ++i) {
+			const unsigned offset = instruction.operands.u32[i];
+			if (offset > object.size || sizes[i] > object.size - offset)
+				reader_error("OP_RENDER member exceeds object size");
+			const auto member = std::find_if(object.variable_data.begin(), object.variable_data.end(),
+				[&](const auto &entry) {
+					return entry.second.name == names[i] && entry.second.type == types[i] &&
+						entry.second.offset == offset && entry.second.size == sizes[i];
+				});
+			if (member == object.variable_data.end())
+				reader_error("OP_RENDER member layout does not match object metadata");
+		}
+	}
 	data.code_loaded = true;
 }
 

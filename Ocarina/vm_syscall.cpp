@@ -125,16 +125,9 @@ VMOperand SyscallContext::texture(const std::vector<VMOperand> &arguments) {
 }
 
 void SyscallContext::render_texture(const std::vector<VMOperand> &arguments) {
-
-	std::string tex_path = vm.vm_string_pool.str_pool.at(static_cast<unsigned>(arguments[0].val.i32));
-
-	assert(vm.texture_pool.find(tex_path) != vm.texture_pool.end());
-
-	Vector pos = Vector(arguments[1].val.v[0], arguments[1].val.v[1]);
-	float width = arguments[2].val.f32;
-	float height = arguments[3].val.f32;
-
-	vm.engine.get_renderer()->render_image(vm.texture_pool[tex_path], pos, width, height);
+	const VMOperand &position = arguments[1];
+	vm.render_texture(arguments[0], Vector(position.val.v[0], position.val.v[1], position.val.v[2]),
+		arguments[2].val.f32, arguments[3].val.f32);
 }
 
 void SyscallContext::set_scene(const std::vector<VMOperand> &arguments) {

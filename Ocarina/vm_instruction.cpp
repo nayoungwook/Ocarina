@@ -6,40 +6,40 @@
 
 void OVM::exec_instruction(const VMInstruction &instruction,
 	std::size_t &instruction_index,
-	VMFrame &frame,
 	unsigned hierarchy_index) {
 	const auto &arguments = instruction.operands.u32;
 
 	switch (instruction.opcode) {
 	case OP_DUP: {
 		const unsigned count = arguments[0];
-		if (count == 0 || count > vm_stack.size() - frame.operand_base)
+		if (count == 0 || count > stack_index)
 			throw OVMPanic("Invalid operand count for duplication.");
-		const std::size_t begin = vm_stack.size() - count;
+		if (count > MAX_STACK_SIZE - stack_index)
+			throw OVMPanic("VM operand stack overflow.");
+		const std::size_t begin = stack_index - count;
 		for (unsigned i = 0; i < count; ++i)
-			vm_stack_push(vm_stack.at(begin + i));
+			vm_stack_push(vm_stack[begin + i]);
 		break;
 	}
 	case OP_SP_PUSH:
-		if (frame.stack_pointer > frame.data.size ||
-			arguments[0] > frame.data.size - frame.stack_pointer)
-			throw OVMPanic("VM stack frame overflow.");
-		frame.stack_pointer += arguments[0];
+		if (arguments[0] > stack.size - stack_pointer)
+			throw OVMPanic("VM call stack overflow.");
+		stack_pointer += arguments[0];
 		break;
 	case OP_SP_POP:
-		if (arguments[0] > frame.stack_pointer)
-			throw OVMPanic("VM stack frame underflow.");
-		frame.stack_pointer -= arguments[0];
+		if (arguments[0] > stack_pointer - stack_frame)
+			throw OVMPanic("VM local stack underflow.");
+		stack_pointer -= arguments[0];
 		break;
 	case OP_SP_LOAD:
-		vm_stack_push(frame.data.load(arguments[0], arguments[1]));
+		vm_stack_push(stack.load(stack_frame + arguments[0], arguments[1]));
 		break;
 	case OP_SP_SAVE:
-		frame.data.save(arguments[0], arguments[1], vm_stack_pop());
+		stack.save(stack_frame + arguments[0], arguments[1], vm_stack_pop());
 		break;
 	case OP_SP_INCRE:
 	case OP_SP_DECRE:
-		frame.data.increment(arguments[0], arguments[1], instruction.opcode == OP_SP_DECRE);
+		stack.increment(stack_frame + arguments[0], arguments[1], instruction.opcode == OP_SP_DECRE);
 		break;
 	case OP_SYSCALL: {
 		const auto operands = update_function_arguments(arguments[1]);
@@ -53,14 +53,17 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 
 		break;
 	}
+	case OP_RENDER:
+		exec_render(instruction, hierarchy_index);
+		break;
 	case OP_CALL:
 	case OP_CALL_ATTR:
 	case OP_CALL_OBJECT:
 	case OP_CALL_GLOBAL: {
 		if (instruction.opcode == OP_CALL_ATTR) {
-			if (arguments[1] >= vm_stack.size())
+			if (arguments[1] >= stack_index)
 				throw OVMPanic("Method receiver is missing.");
-			const VMOperand receiver = vm_stack.at(vm_stack.size() - arguments[1] - 1);
+			const VMOperand receiver = vm_stack[stack_index - arguments[1] - 1];
 			const VMHierarchyObject &object = find_object(receiver);
 			call_function(vm_find_member_function_data(object.object_id, arguments[0]),
 				arguments[1],
@@ -107,11 +110,6 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 		vm_stack_push(operand);
 		break;
 	}
-	case OP_RET:
-		break;
-	case OP_RET_VAL:
-		frame.return_value = vm_stack_pop();
-		break;
 	case OP_EXPR_OP: {
 		const VMOperand rhs = vm_stack_pop();
 		const VMOperand lhs = vm_stack_pop();
@@ -134,8 +132,12 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 	case OP_SAVE_VECTOR_COMPONENT: {
 		const VMOperand value = vm_stack_pop();
 		VMStorage *storage = nullptr;
+		unsigned offset = arguments[1];
 		switch (static_cast<VectorStorage>(arguments[0])) {
-		case VectorStorage::Local: storage = &frame.data; break;
+		case VectorStorage::Local:
+			storage = &stack;
+			offset += stack_frame;
+			break;
 		case VectorStorage::Global: storage = &globals; break;
 		case VectorStorage::Object:
 			if (hierarchy_index == 0 || hierarchy_index >= hierarchy.size())
@@ -147,13 +149,13 @@ void OVM::exec_instruction(const VMInstruction &instruction,
 			break;
 		default: throw OVMPanic("Invalid vector storage.");
 		}
-		if (arguments[1] > storage->size || storage->size - arguments[1] < 12 || arguments[2] > 2)
+		if (offset > storage->size || storage->size - offset < 12 || arguments[2] > 2)
 			throw OVMPanic("Invalid vector component store.");
-		VMOperand vector = storage->load(arguments[1], 12);
+		VMOperand vector = storage->load(offset, 12);
 		if (vector.op_type != VMOPType::OPRND_VEC || value.op_type != VMOPType::OPRND_FLOAT32)
 			throw OVMPanic("Vector component requires a float value.");
 		vector.val.v[arguments[2]] = value.val.f32;
-		storage->save(arguments[1], 12, vector);
+		storage->save(offset, 12, vector);
 		break;
 	}
 	case OP_GOTO:

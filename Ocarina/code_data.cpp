@@ -46,6 +46,8 @@ int vm_instruction_operand_count(std::uint8_t opcode) {
 		return 2;
 	case OP_NEW_OBJECT:
 		return 4;
+	case OP_RENDER:
+		return 5;
 	case OP_SAVE_VECTOR_COMPONENT:
 	case OP_CALL_SUPER_METHOD:
 		return 3;
@@ -84,6 +86,8 @@ VMOPType vm_operand_type(std::string_view type) {
 
 	if (type == "vector")
 		return VMOPType::OPRND_VEC;
+	if (type == "texture")
+		return VMOPType::OPRND_TEXTURE;
 
 	return VMOPType::OPRND_ADDRESS;
 }

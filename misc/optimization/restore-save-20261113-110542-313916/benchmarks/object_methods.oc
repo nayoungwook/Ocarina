@@ -1,0 +1,16 @@
+object Counter {
+    var value:int = 7;
+    func step(delta:int):int {
+        value = (value * 17 + delta) % 1000003;
+        return value;
+    }
+}
+
+func main():int {
+    var counter:Counter = new Counter();
+    var total:int = 0;
+    for (var i:int = 0; i < 200000; i++) {
+        total = (total + counter.step(11)) % 1000003;
+    }
+    return total;
+}

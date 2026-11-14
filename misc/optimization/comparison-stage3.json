@@ -1,0 +1,583 @@
+{
+  "measured": "20261113-105050-573148",
+  "baseline": "current",
+  "rounds": 3,
+  "samples_per_version": 27,
+  "environment": {
+    "date": "2026-11-13T10:50:50.594917+09:00",
+    "cpu": "Intel(R) Core(TM) Ultra 7 255H",
+    "os": "Windows-11-10.0.26200-SP0",
+    "logical_cpus": 16,
+    "python": "3.14.6 (main, Jul 23 2026, 14:44:54) [MSC v.1944 64 bit (AMD64)]",
+    "python_executable": "C:\\Users\\nyw\\AppData\\Roaming\\uv\\python\\cpython-3.14.6-windows-x86_64-none\\python.exe",
+    "node": "v24.19.0",
+    "dotnet": "10.0.401",
+    "source_sha256": "85737331954d6d565a2102c70826e7fc3e622981375ecd0ffb73f0a6db1247fc",
+    "python_jit_enabled": false,
+    "msvc_tools": "14.51.36231",
+    "git_head": "9bd2787def78ddbdf8bd789a668ad37c488c7eeb",
+    "dirty_files": [
+      "M Ocarina/Ocarina.vcxproj",
+      " M Ocarina/Ocarina.vcxproj.filters",
+      " M Ocarina/code_data.cpp",
+      " M Ocarina/code_data.h",
+      " M Ocarina/ir.cpp",
+      " M Ocarina/ir.h",
+      " M Ocarina/ir_load.cpp",
+      " M Ocarina/semantics.cpp",
+      " M Ocarina/type.cpp",
+      " M Ocarina/vm.cpp",
+      " M Ocarina/vm.h",
+      " M Ocarina/vm_execute.cpp",
+      " M Ocarina/vm_instruction.cpp",
+      " M Ocarina/vm_memory.cpp",
+      " M Ocarina/vm_memory.h",
+      " M Ocarina/vm_numeric.h",
+      " M Ocarina/vm_syscall.cpp",
+      " M README.md",
+      "?? Ocarina/vm_dispatch.h",
+      "?? Ocarina/vm_render.cpp",
+      "?? bench.py",
+      "?? misc/"
+    ],
+    "timer": "steady_clock / perf_counter_ns / performance.now",
+    "samples": 9,
+    "warmup_calls": 5,
+    "minimum_batch_ms": 50,
+    "timing_scope": "Warm in-process kernel time. Excludes process startup, source compilation, bytecode loading, graphics and printing. Includes Ocarina run setup/cleanup.",
+    "optimizations": "MSVC Release /O2 /GL /MD /fp:precise; Node default V8 JIT; CPython default without JIT; .NET Release with tiered compilation disabled",
+    "overflow": "Integer intermediates stay inside signed int32; double kernels use IEEE binary64"
+  },
+  "summary": [
+    {
+      "workload": "integer_loop",
+      "before_ms": 37.5474,
+      "current_ms": 14.821475,
+      "speedup": 2.5333106185450505
+    },
+    {
+      "workload": "double_loop",
+      "before_ms": 37.40285,
+      "current_ms": 13.931525,
+      "speedup": 2.684763512967891
+    },
+    {
+      "workload": "recursive_fib",
+      "before_ms": 11.5678875,
+      "current_ms": 3.001784375,
+      "speedup": 3.853670368978451
+    },
+    {
+      "workload": "object_methods",
+      "before_ms": 65.8918,
+      "current_ms": 21.58915,
+      "speedup": 3.0520794009954075
+    }
+  ],
+  "measurements": [
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 16,
+      "warmup_calls": 5,
+      "samples_ms": [
+        3.03164375,
+        2.87963125,
+        3.06195,
+        2.94509375,
+        3.0598125,
+        2.8254375,
+        2.8786,
+        3.0257375,
+        2.951125
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 8,
+      "warmup_calls": 5,
+      "samples_ms": [
+        12.407725,
+        13.2100625,
+        13.7724125,
+        13.4393375,
+        12.0385125,
+        11.8862375,
+        11.3645875,
+        11.489375,
+        11.4929625
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        36.86815,
+        37.1178,
+        38.04585,
+        37.40285,
+        37.36445,
+        36.95035,
+        37.47575,
+        35.9629,
+        36.199
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        13.869425,
+        14.023375,
+        14.496375,
+        14.41235,
+        14.388175,
+        14.046625,
+        13.694275,
+        14.02015,
+        14.428225
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        36.72375,
+        36.8776,
+        37.6313,
+        36.8917,
+        38.2418,
+        36.9342,
+        36.78015,
+        36.96175,
+        38.73915
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        15.05285,
+        16.069575,
+        14.4193,
+        14.66745,
+        14.921825,
+        14.94225,
+        14.8824,
+        14.636475,
+        14.86435
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.9113,
+        38.57135,
+        38.4851,
+        38.24155,
+        36.98035,
+        37.69155,
+        36.77785,
+        37.1899,
+        38.49855
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        13.64505,
+        14.010825,
+        13.5549,
+        13.55905,
+        14.148725,
+        13.632125,
+        13.7848,
+        14.2855,
+        13.86485
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        14.628525,
+        14.40695,
+        14.65485,
+        15.33185,
+        14.821475,
+        14.84465,
+        14.712,
+        14.480125,
+        14.543275
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.40565,
+        39.8528,
+        37.83595,
+        37.35575,
+        38.80725,
+        38.61355,
+        38.69,
+        36.2759,
+        36.5377
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        22.71465,
+        22.54585,
+        21.696925,
+        22.20255,
+        22.27405,
+        21.635775,
+        22.025825,
+        22.074525,
+        22.1751
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        64.9042,
+        63.9346,
+        65.7285,
+        64.9279,
+        66.966,
+        64.9297,
+        66.0401,
+        65.2507,
+        66.6765
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        65.9655,
+        66.0148,
+        65.8918,
+        65.5848,
+        66.644,
+        65.4876,
+        65.829,
+        66.6324,
+        67.3155
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        21.58915,
+        21.411375,
+        21.4543,
+        21.09125,
+        21.389875,
+        21.083725,
+        21.34765,
+        21.571475,
+        20.6706
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 8,
+      "warmup_calls": 5,
+      "samples_ms": [
+        11.61255,
+        11.47485,
+        11.4878375,
+        12.0348,
+        13.3296875,
+        11.3814875,
+        11.90175,
+        11.5678875,
+        11.2643
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 32,
+      "warmup_calls": 5,
+      "samples_ms": [
+        2.985540625,
+        3.010615625,
+        2.945709375,
+        2.96379375,
+        3.001784375,
+        3.0362375,
+        3.048065625,
+        3.09371875,
+        3.014953125
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        14.03075,
+        13.571725,
+        13.793875,
+        13.783225,
+        13.813775,
+        13.934075,
+        13.931525,
+        13.8769,
+        13.938325
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        38.05605,
+        37.0112,
+        37.4145,
+        38.7703,
+        38.14635,
+        36.78975,
+        37.14145,
+        37.5685,
+        37.3931
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        78.9741,
+        66.0648,
+        66.9587,
+        66.7117,
+        69.6742,
+        65.4373,
+        64.8589,
+        64.9931,
+        64.5612
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        21.6296,
+        21.5787,
+        21.379825,
+        21.686225,
+        20.8268,
+        21.3701,
+        21.179625,
+        21.63965,
+        21.9208
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.91455,
+        39.8924,
+        37.5474,
+        38.9415,
+        38.03695,
+        37.4393,
+        37.92935,
+        37.0394,
+        36.97185
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        15.04185,
+        16.574775,
+        14.62735,
+        14.819825,
+        14.55545,
+        14.81145,
+        15.261525,
+        15.113225,
+        15.927425
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 8,
+      "warmup_calls": 5,
+      "samples_ms": [
+        11.44175,
+        11.493775,
+        11.7422875,
+        11.4971375,
+        11.433475,
+        11.4383125,
+        11.6065375,
+        11.6345125,
+        11.3876375
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 32,
+      "warmup_calls": 5,
+      "samples_ms": [
+        3.147809375,
+        2.958878125,
+        2.950721875,
+        3.08103125,
+        3.013403125,
+        2.9736,
+        3.003575,
+        2.948903125,
+        2.969328125
+      ],
+      "version": "current",
+      "round": 1
+    }
+  ]
+}

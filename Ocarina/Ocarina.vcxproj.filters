@@ -52,6 +52,7 @@
     <ClCompile Include="vm_execute.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_instruction.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_memory.cpp"><Filter>소스 파일</Filter></ClCompile>
+    <ClCompile Include="vm_render.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_hierarchy.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_numeric.cpp"><Filter>소스 파일</Filter></ClCompile>
     <ClCompile Include="vm_syscall.cpp">

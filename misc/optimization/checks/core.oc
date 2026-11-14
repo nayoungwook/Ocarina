@@ -1,0 +1,75 @@
+object Base {
+    var value:int = 0;
+    constructor Base(value:int) { this.value = value; }
+    func get(add:int):int { return value + add; }
+}
+object Child extends Base {
+    var nested:Base = new Base(3);
+    constructor Child(value:int) { super(value); }
+    func get(add:int):int { return super.get(add) + nested.get(2); }
+}
+scene Level {
+    var ticks:int = 0;
+    func update():void { ticks++; }
+}
+object FloatBase {
+    var x:float = 1.5f;
+    var y:double = 2.25;
+    func move(delta:float):double {
+        x += delta;
+        y += x;
+        return y;
+    }
+}
+object FloatChild extends FloatBase {
+    var flag:bool = false;
+    var unaligned:int = 9;
+}
+func recurse(n:int):int {
+    if (n == 0) { return 0; }
+    return n + recurse(n - 1);
+}
+func mixed(a:double, b:float, c:int):double {
+    var result:double = a + b;
+    return result + c;
+}
+func dispatch(receiver:Base, add:int):int { return receiver.get(add); }
+func early(value:int):int {
+    for (var i:int = 0; i < 10; i++) {
+        if (i == value) { return i * 2; }
+    }
+    return -1;
+}
+func main():int {
+    var child:Child = new Child(7);
+    var moving:FloatChild = new FloatChild();
+    if (moving.move(0.5f) != 4.25 || moving.x != 2.0f || moving.y != 4.25) { return 12; }
+    moving.unaligned++;
+    if (moving.unaligned != 10) { return 13; }
+    var group:Base = new Base(0);
+    group.add_child(child);
+    if (group.child_size() != 1) { return 1; }
+    if (cast<Child>(group.get_child(0)).get(4) != 16) { return 2; }
+    var level:Level = new Level();
+    set_scene(level);
+    level.update();
+    if (level.ticks != 1) { return 3; }
+    var total:int = 0;
+    for (var i:int = 0; i < 20; i++) {
+        total += child.get(i);
+		if (dispatch(child, 4) != 16 || dispatch(group, 4) != 4) { return 10; }
+        if (mixed(1.25, 2.5f, 3) != 6.75) { return 4; }
+        if (recurse(20) != 210) { return 5; }
+		if (early(4) != 8 || early(20) != -1) { return 11; }
+    }
+    if (total != 430) { return 6; }
+    var vector_value:vector = vector(1, 2, 3);
+    vector_value.x += 4;
+    vector_value *= 2;
+    if (vector_value.x != 10 || vector_value.y != 4 || vector_value.z != 6) { return 7; }
+    var maximum:int = 2147483647;
+    maximum += 1;
+    if (maximum != -2147483647 - 1) { return 8; }
+    if (maximum / -1 != maximum || maximum % -1 != 0) { return 9; }
+    return 0;
+}

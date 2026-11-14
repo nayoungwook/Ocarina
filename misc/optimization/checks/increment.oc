@@ -1,0 +1,16 @@
+func main():int {
+    var number:float = 1.5f;
+    number++;
+    if (number != 2.5f) { return 1; }
+    number--;
+    var precise:double = 3.25;
+    precise++;
+    precise--;
+    if (precise != 3.25 || number != 1.5f) { return 2; }
+    var integer:int = 2147483647;
+    integer++;
+    if (integer != -2147483647 - 1) { return 3; }
+    integer--;
+    if (integer != 2147483647) { return 4; }
+    return 0;
+}

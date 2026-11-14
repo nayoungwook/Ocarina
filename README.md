@@ -65,7 +65,7 @@ std::optional<VMOperand> result = vm.run(std::cout);
 
 `OVM`이 등록·로딩·실행을 모두 담당합니다. `clear()`는 바이트, 메타데이터, 문자열 풀과 실행 상태를 초기화합니다.
 기존 `std::runtime_error` 대신 `ovm_panic.h`의 `OVMPanic` 예외를 사용합니다. 컴파일 오류인 `FrontendError`도 이를 상속합니다.
-셸은 이를 `OVM Panic:` 접두사와 함께 표시하며, VM 실행 오류에는 호출 추적이 포함됩니다.
+셸은 이를 `OVM Panic:` 접두사와 함께 표시합니다.
 인자 타입·지역 변수·객체 배치 정보는 모두 IR 바이트에 기록됩니다.
 `register_ir()`와 `register_bytes()`는 같은 데이터를 등록하므로 파일로 저장한 후에도 보조 정보 없이 실행할 수 있습니다.
 
@@ -155,23 +155,49 @@ func main():void {
 `obj.get_child(index)`는 현재 자식 목록의 0부터 시작하는 순서로 조회하며, 객체 내부에서는 `get_child(index)`로 호출할 수 있습니다.
 인덱스는 숫자 하나를 받아 기존 숫자 변환 규칙에 따라 `int`로 변환합니다. 음수·범위 초과·null 수신 객체는 실행 오류입니다.
 반환 타입 `object`는 공통 객체 참조입니다. 변수·매개변수·반환값으로 사용할 수 있고, 모든 구체적인 객체 타입을 담을 수 있습니다.
-`object` 참조에서도 공통 멤버 `position`·`size`·`rotation`을 읽고 수정할 수 있습니다. 예: `obj.get_child(0).position.x += 1;`
+`object` 참조에서도 공통 멤버 `texture`·`position`·`width`·`height`·`rotation`을 읽고 수정할 수 있습니다. 예: `obj.get_child(0).position.x += 1;`
 공통 멤버는 구체적인 타입·부모 타입·`object` 참조에서 같은 저장 공간을 사용합니다.
 사용자 정의 멤버에 접근하려면 `cast<Item>(obj.get_child(0))`처럼 캐스트합니다. `object` 참조에서는 `add_child`·`get_child`·`child_size`를 직접 호출할 수 있습니다.
 GC, 개별 객체 해제와 자식 분리 API는 구현하지 않습니다. 전체 hierarchy는 실행 상태 초기화 시 정리합니다.
 기존 배열 타입·리터럴·인덱싱과 `push`, `remove`, `length`는 제거했습니다. 이를 사용하던 소스는 객체 계층 구조로 변경해야 합니다.
 
 엔진은 소유 VM을 직접 참조하며, 고정 업데이트마다 hierarchy의 모든 객체에 `update():void`를,
-렌더 프레임마다 `render():void`를 호출합니다. 각 타입의 기본 구현은 빈 함수이며 재정의할 수 있습니다.
+렌더 프레임마다 `render():void`를 호출합니다. 기본 `update()`와 씬의 기본 `render()`는 빈 함수입니다.
+일반 객체의 기본 `render()`는 `OP_RENDER`로 `texture`, `position`, `width`, `height`, `rotation`을 읽어 렌더 큐에 추가합니다.
+실제 화면 출력은 기존 엔진의 프레임 끝에서 수행합니다. `position`은 중심 좌표, `rotation`은 라디안입니다.
+텍스처의 기본값은 `null`이고 나머지 기본값은 0입니다. 텍스처가 없거나 너비·높이가 0이면 그리지 않습니다.
+사용자 정의 `render():void`는 기본 그리기를 대체합니다. 모든 `update`·`render` 재정의는 인자 없이 `void`를 반환해야 합니다.
 부모의 update·render도 실행하려면 자식의 함수에서 `super.update()`·`super.render()`를 명시적으로 호출합니다.
 호출 순서는 객체 생성 순서이며, 한 순회 중 생성된 객체는 다음 순회부터 참여합니다.
 Scene 없이도 두 함수가 실행됩니다. 창이 열려 있으면 `main`의 지역 객체를 포함한 VM 상태를 유지합니다.
 `ReturnAfterMain`을 사용하는 C++ 호출자는 출력 스트림을 창 실행이 끝날 때까지 유지해야 합니다.
 
+```text
+object Sprite {
+    constructor Sprite() {
+        this.texture = texture("test.png");
+        position = vector(0, 0);
+        width = 100;
+        height = 100;
+        rotation = 0;
+    }
+}
+
+func main():void {
+    window("Object", 800, 600);
+    var sprite:Sprite = new Sprite();
+}
+```
+
+기본 객체 레이아웃과 `OP_RENDER`를 반영하려면 소스를 다시 컴파일하고 생성된 `.ob`를 다시 등록해야 합니다.
+
 `ParserContext`, `TokenizerContext`, `IRContext`는 클래스입니다. AST 자식, 심볼, VM 객체 참조는 인덱스로 관리합니다.
-AST·토큰·타입·스택·hierarchy 데이터는 C++ 컨테이너가 값을 소유합니다.
-함수 프레임은 `OVM`의 컨테이너에서 처리하므로 VM 재귀 호출이 C++ 재귀 호출로 이어지지 않습니다.
-현재 호출 깊이는 512단계, 프레임 총 크기는 1 MiB, 피연산자 스택은 262,144개로 제한합니다.
+AST·토큰·타입·hierarchy 데이터는 C++ 컨테이너가 값을 소유합니다.
+피연산자 스택은 VM마다 힙에 한 번 할당하는 고정 용량 배열이며, push/pop과 함수 반환은 인덱스로 처리합니다.
+용량은 실행 중 변하지 않으며, 재실행 시 버퍼를 재사용하고 사용 중인 원소 수만 0으로 초기화합니다.
+함수 실행은 Chestnut처럼 C++ 함수 호출로 처리합니다. 지역 변수는 VM의 공유 스택에 저장하며 `stack_pointer`와 `stack_frame` 오프셋으로 접근합니다.
+`OP_SP_PUSH`·`OP_SP_POP`이 지역 스택을 조정하고, 함수 반환 시 호출자의 오프셋을 복원합니다. 재귀 호출은 C++ 호출 스택을 사용합니다.
+지역 스택 용량은 1 MiB, 피연산자 스택 용량은 262,144개입니다.
 null 접근, hierarchy 순환 관계, 0으로 나누기와 스택 오류는 예외로 보고합니다.
 
 지역·전역·객체 변수는 연속 바이트 버퍼에 저장하며, load/save는 바이트 offset으로 직접 접근해 `memcpy`합니다.
@@ -230,6 +256,7 @@ Tonic 엔진의 C++ API는 `tonic_context.h`의 `TonicContext`로 사용합니�
 | `code_data.cpp`, `ir_load.cpp` | VM 데이터와 IR 로딩 |
 | `vm.cpp`, `vm_execute.cpp`, `vm_instruction.cpp` | 등록과 실행 |
 | `vm_memory.cpp`, `vm_numeric.cpp`, `vm_syscall.cpp` | 메모리·연산·내장 함수 |
+| `vm_render.cpp` | 기본 객체 렌더링과 텍스처 그리기 |
 | `vm_hierarchy.cpp` | 객체 저장과 부모·자식 연결 |
 | `util.cpp` | 파일 읽기·쓰기 |
 | `main.cpp`, `shell_commands.cpp` | 명령 셸과 컴파일·바이트코드 등록 |

@@ -1,0 +1,2 @@
+func recurse(n:int):int { return recurse(n + 1); }
+func main():int { return recurse(0); }

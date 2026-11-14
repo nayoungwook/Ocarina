@@ -55,8 +55,10 @@ static void add_builtin_function(ParserContext &pc, ObjectData &object,
 
 void SemanticsContext::register_objects(ParserContext &pc) {
 	ObjectData builtin_object = {};
+	add_builtin_member(pc, builtin_object, "texture", "texture");
 	add_builtin_member(pc, builtin_object, "position", "vector");
-	add_builtin_member(pc, builtin_object, "size", "vector");
+	add_builtin_member(pc, builtin_object, "width", "float");
+	add_builtin_member(pc, builtin_object, "height", "float");
 	add_builtin_member(pc, builtin_object, "rotation", "float");
 
 	for (Node &node : pc.nodes) {
@@ -153,10 +155,9 @@ std::size_t SemanticsContext::register_func_data(ParserContext &pc, const Token 
 		if (existing != object_data.member_funcs.end()) {
 			if (!existing->second.is_builtin || is_constructor)
 				panic("Duplicate member function: " + data.func_name, pc.tc);
-			if (is_scene_reference(object_data.object_type) &&
-				(data.arg_count != existing->second.arg_count ||
-				 data.return_type.type_str != existing->second.return_type.type_str))
-				panic("Scene update and render must have no arguments and return void.", pc.tc);
+			if (data.arg_count != existing->second.arg_count ||
+				data.return_type.type_str != existing->second.return_type.type_str)
+				panic("update and render must have no arguments and return void.", pc.tc);
 			data.symbol_id = existing->second.symbol_id;
 			data.id = existing->second.id;
 			pc.func_data.at(data.symbol_id) = data;
@@ -400,7 +401,7 @@ void SemanticsContext::check_value(ParserContext &pc, Node &node, const Type &ex
 	if (actual.type_kind == TK_Scene && expected.type_str == "scene")
 		return;
 	if (actual.type_kind == TK_Null && (is_instance_reference(expected) ||
-		expected.type_str == "string" || expected.type_str == "window"))
+		expected.type_str == "string" || expected.type_str == "window" || expected.type_str == "texture"))
 		return;
 	const auto scalar = [](const Type &type) {
 		return type.type_kind == TK_Numeric || type.type_str == "bool" || type.type_str == "char";

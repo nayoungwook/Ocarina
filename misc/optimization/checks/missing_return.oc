@@ -1,0 +1,2 @@
+func missing():int {}
+func main():int { return 3 + missing(); }

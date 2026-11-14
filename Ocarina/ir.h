@@ -130,6 +130,7 @@
 #define OP_LOAD_THIS 0xa1 // push the current receiver reference
 #define OP_VECTOR_COMPONENT 0xa2 // extract component(uint) from a vector value
 #define OP_SAVE_VECTOR_COMPONENT 0xa3 // storage(uint), vector offset(uint), component(uint)
+#define OP_RENDER 0xa4 // texture, position, width, height, rotation byte offsets in the receiver
 
 enum class VectorStorage : unsigned { Local, Global, Object, Attribute };
 

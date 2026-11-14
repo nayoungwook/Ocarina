@@ -1,0 +1,9 @@
+func main():int {
+    var value:int = 7;
+    var total:int = 0;
+    for (var i:int = 0; i < 200000; i++) {
+        value = (value * 17 + 11) % 1000003;
+        total = (total + value) % 1000003;
+    }
+    return total;
+}

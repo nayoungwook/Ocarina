@@ -3,6 +3,7 @@
 #include "vm_numeric.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstring>
 #include "ovm_panic.h"
 
@@ -26,12 +27,11 @@ void VMStorage::save(unsigned offset, unsigned size, VMOperand operand) {
 
 void VMStorage::increment(unsigned offset, unsigned size, bool decrease) {
 	VMOperand operand = load(offset, size);
-	VMOperand one;
-	one.op_type = VMOPType::OPRND_INT32;
-	one.val.i32 = 1;
-	const VMOPType target = operand.op_type;
-	operand = vm_numeric_operation(decrease ? OP_SUB : OP_ADD, operand, one);
-	save(offset, size, convert_argument(operand, target));
+	assert(operand.op_type == VMOPType::OPRND_INT32);
+	VMOperand result = {};
+	result.op_type = VMOPType::OPRND_INT32;
+	result.val.i32 = operand.val.i32 + (decrease ? -1 : 1);
+	save(offset, size, result);
 }
 
 VMHierarchyObject &OVM::find_object(const VMOperand &operand) {
@@ -88,10 +88,11 @@ void OVM::exec_instance_method(unsigned hierarchy_index, std::string_view method
 }
 
 void OVM::exec_hierarchy(std::string_view method) {
-	if (!syscalls || !frames.empty())
+	if (!syscalls || executing)
 		return;
 
 	const std::size_t count = hierarchy.size();
+	executing = true;
 	try {
 		if (current_scene != 0)
 			exec_instance_method(current_scene, method);
@@ -99,6 +100,7 @@ void OVM::exec_hierarchy(std::string_view method) {
 			if (!object_data.at(hierarchy.at(index).object_id).is_scene)
 				exec_instance_method(index, method);
 		}
+		executing = false;
 	}
 	catch (...) {
 		clear_execution();
@@ -118,16 +120,16 @@ void OVM::vm_exec_object_initializers(unsigned object_id, unsigned hierarchy_ind
 	for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
 		for (const auto &[id, variable] : this->object_data.at(*parent).variable_data) {
 			VMOperand operand;
-			operand.op_type = variable.operand_type;
+			operand.op_type = variable.operand_type == VMOPType::OPRND_TEXTURE
+				? VMOPType::OPRND_NULL : variable.operand_type;
 			hierarchy.at(hierarchy_index).data.save(variable.offset, variable.size, operand);
 		}
 	}
 
-	// Frames execute from the back: parent initializers run before child initializers.
-	for (unsigned parent : parents) {
-		const VMFunctionData &initializer = this->object_data.at(parent).initializer;
+	for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
+		const VMFunctionData &initializer = this->object_data.at(*parent).initializer;
 		if (initializer.code_loaded)
-			push_frame(initializer, {}, hierarchy_index);
+			vm_exec_function(initializer, hierarchy_index);
 	}
 }
 
@@ -150,25 +152,24 @@ void OVM::exec_new_object(const VMInstruction &instruction) {
 	object.data.resize(object_data.size);
 
 	const unsigned hierarchy_index = hierarchy.store(std::move(object));
-	const std::size_t first_frame = frames.size();
 
+	const VMFunctionData *constructor = nullptr;
 	if (instruction.operands.i32[2] >= 0) {
-		const VMFunctionData &constructor = object_data.function_data.at(arguments[2]);
-		if (!constructor.is_constructor)
+		constructor = &object_data.function_data.at(arguments[2]);
+		if (!constructor->is_constructor)
 			throw OVMPanic("Object constructor expected.");
-		push_frame(constructor, std::move(operands), hierarchy_index);
 	}
 	else if (!operands.empty())
 		throw OVMPanic("Arguments supplied to an object without a constructor.");
 
+	vm_exec_object_initializers(object_data.id, hierarchy_index);
+	if (constructor != nullptr)
+		vm_exec_function(*constructor, hierarchy_index, operands);
+
 	VMOperand operand;
 	operand.op_type = VMOPType::OPRND_ADDRESS;
 	operand.val.i32 = static_cast<std::int32_t>(hierarchy_index);
-	vm_exec_object_initializers(object_data.id, hierarchy_index);
-	if (frames.size() > first_frame)
-		frames.at(first_frame).result_override = operand;
-	else
-		vm_stack_push(operand);
+	vm_stack_push(operand);
 }
 
 void OVM::exec_object_member_instruction(const VMInstruction &instruction, unsigned hierarchy_index) {

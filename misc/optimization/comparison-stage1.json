@@ -1,0 +1,537 @@
+{
+  "measured": "20261113-103125",
+  "rounds": 3,
+  "samples_per_version": 27,
+  "summary": [
+    {
+      "workload": "integer_loop",
+      "before_ms": 37.16265,
+      "current_ms": 25.3336,
+      "speedup": 1.4669312691445353
+    },
+    {
+      "workload": "double_loop",
+      "before_ms": 36.85785,
+      "current_ms": 24.553875,
+      "speedup": 1.501101150022145
+    },
+    {
+      "workload": "recursive_fib",
+      "before_ms": 11.5519375,
+      "current_ms": 5.32190625,
+      "speedup": 2.170639044985056
+    },
+    {
+      "workload": "object_methods",
+      "before_ms": 66.2786,
+      "current_ms": 36.4758,
+      "speedup": 1.8170567883363764
+    }
+  ],
+  "measurements": [
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 16,
+      "warmup_calls": 5,
+      "samples_ms": [
+        5.235275,
+        5.4273,
+        5.57346875,
+        5.377875,
+        5.299825,
+        5.31841875,
+        5.37595,
+        5.11904375,
+        5.23278125
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        11.264025,
+        11.0516,
+        20.80825,
+        11.019425,
+        11.6755,
+        11.7309,
+        11.133225,
+        11.45215,
+        11.255925
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        35.99265,
+        36.07535,
+        36.07245,
+        36.28875,
+        36.6511,
+        36.06655,
+        35.76965,
+        36.1392,
+        37.59505
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        24.59255,
+        24.367275,
+        23.804375,
+        24.202275,
+        23.87845,
+        24.553875,
+        24.469275,
+        24.106675,
+        24.40955
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        38.3753,
+        37.16265,
+        38.62405,
+        37.4301,
+        36.60335,
+        35.83455,
+        36.3262,
+        36.9924,
+        37.9464
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        25.104225,
+        25.898,
+        24.34945,
+        24.650125,
+        25.222375,
+        25.186175,
+        25.328475,
+        25.856825,
+        25.176075
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.54965,
+        37.1493,
+        37.42065,
+        37.46565,
+        39.08255,
+        36.85785,
+        37.18825,
+        36.7582,
+        37.6129
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        24.7259,
+        25.9356,
+        24.69015,
+        25.65235,
+        24.0134,
+        24.9027,
+        25.381,
+        26.04065,
+        24.84385
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        26.1371,
+        25.61645,
+        25.56565,
+        25.0058,
+        25.13935,
+        24.9847,
+        25.7097,
+        25.9945,
+        25.46575
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        39.27845,
+        38.2751,
+        37.13,
+        38.74585,
+        37.6595,
+        36.8366,
+        36.92295,
+        36.5109,
+        36.6735
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        36.66195,
+        36.39025,
+        36.72375,
+        36.1198,
+        35.91495,
+        36.5243,
+        36.67885,
+        36.37245,
+        38.03345
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        64.7333,
+        63.1672,
+        63.9196,
+        65.3242,
+        64.6076,
+        66.3473,
+        66.0293,
+        66.2786,
+        67.3397
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        66.7826,
+        65.3373,
+        68.1915,
+        68.6347,
+        67.3167,
+        65.1705,
+        67.0397,
+        68.4404,
+        72.6477
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.4728,
+        36.59715,
+        37.6321,
+        36.6654,
+        35.91085,
+        36.1959,
+        36.4758,
+        36.38385,
+        36.9647
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 8,
+      "warmup_calls": 5,
+      "samples_ms": [
+        11.601325,
+        11.5236875,
+        11.849275,
+        11.741975,
+        11.3324875,
+        11.8109625,
+        11.4663125,
+        11.5936375,
+        11.704325
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 16,
+      "warmup_calls": 5,
+      "samples_ms": [
+        5.32001875,
+        5.441425,
+        5.5077125,
+        5.4848,
+        5.35975,
+        5.3422125,
+        5.3521375,
+        5.4724375,
+        5.1960125
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 4,
+      "warmup_calls": 5,
+      "samples_ms": [
+        24.0009,
+        24.0589,
+        24.6042,
+        24.92785,
+        24.679725,
+        24.65645,
+        24.53545,
+        24.360725,
+        24.18395
+      ],
+      "version": "current",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "double_loop",
+      "size": 200000,
+      "checksum": 1999999,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        37.04355,
+        37.9623,
+        37.31125,
+        37.0351,
+        36.36605,
+        36.5389,
+        37.28325,
+        36.52105,
+        36.4751
+      ],
+      "version": "before",
+      "round": 2
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 1,
+      "warmup_calls": 5,
+      "samples_ms": [
+        64.3503,
+        66.7993,
+        67.605,
+        65.1487,
+        64.4986,
+        66.5936,
+        64.4786,
+        67.6317,
+        65.0434
+      ],
+      "version": "before",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "object_methods",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        36.1419,
+        35.9954,
+        35.80005,
+        35.68655,
+        36.3897,
+        36.74745,
+        38.36765,
+        36.53085,
+        36.05795
+      ],
+      "version": "current",
+      "round": 3
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        36.35645,
+        36.7627,
+        37.83705,
+        36.7424,
+        37.28325,
+        37.55315,
+        38.227,
+        37.9105,
+        36.42675
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "integer_loop",
+      "size": 200000,
+      "checksum": 88824,
+      "batch_repetitions": 2,
+      "warmup_calls": 5,
+      "samples_ms": [
+        31.05565,
+        26.86075,
+        26.8102,
+        25.3336,
+        26.6346,
+        24.4219,
+        25.50045,
+        25.0905,
+        25.0751
+      ],
+      "version": "current",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 8,
+      "warmup_calls": 5,
+      "samples_ms": [
+        11.542025,
+        11.31775,
+        11.73145,
+        11.5261,
+        11.5220125,
+        11.5519375,
+        11.741975,
+        11.8073875,
+        11.6579875
+      ],
+      "version": "before",
+      "round": 1
+    },
+    {
+      "language": "Ocarina",
+      "workload": "recursive_fib",
+      "size": 22,
+      "checksum": 17711,
+      "batch_repetitions": 16,
+      "warmup_calls": 5,
+      "samples_ms": [
+        5.32190625,
+        5.3901625,
+        5.26464375,
+        5.401275,
+        5.28895,
+        5.30730625,
+        5.20076875,
+        5.28049375,
+        5.32069375
+      ],
+      "version": "current",
+      "round": 1
+    }
+  ]
+}

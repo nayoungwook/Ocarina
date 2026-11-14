@@ -389,7 +389,7 @@ void IRContext::gen_number_ir(const NumberLiteralAST &num_lit_ast, bool negative
 
 void IRContext::gen_zero(const Type &type) {
 	if (is_instance_reference(type) ||
-		type.type_str == "string" || type.type_str == "window")
+		type.type_str == "string" || type.type_str == "window" || type.type_str == "texture")
 		emit_byte(OP_PUSH_NULL);
 	else if (type.type_str == "float") {
 		emit_byte(OP_LDC_F4);
@@ -449,6 +449,16 @@ void IRContext::gen_function_ir(const FuncData &func_data,
 		emit_byte(OP_SP_PUSH);
 		emit_int(total_stack_size);
 	}
+
+	bool is_render_function = func_data.is_builtin && func_data.func_name == "render" && current_object != NoNode &&
+		!is_scene_reference(pc.object_data.at(current_object).object_type);
+	if (is_render_function) {
+		emit_byte(OP_RENDER);
+		const ObjectData &object = pc.object_data.at(current_object);
+		for (const auto *name : { "texture", "position", "width", "height", "rotation" })
+			emit_int(object.member_vars.at(name).offset);
+	}
+
 	for (const Node &node : body)
 		gen_node_ir(node);
 	if (return_label != NoNode)

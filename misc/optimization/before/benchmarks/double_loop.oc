@@ -1,0 +1,9 @@
+func main():int {
+    var x:double = 0.25;
+    var y:double = 0.75;
+    for (var i:int = 0; i < 200000; i++) {
+        x = x * 0.99991 + 0.00009;
+        y = y * 0.99981 + x * 0.00019;
+    }
+    return cast<int>((x + y) * 1000000.0);
+}

@@ -5,8 +5,6 @@
 #include "vm_opcode.h"
 
 #include <deque>
-#include <functional>
-#include <optional>
 
 struct VMStorage {
 	unsigned size = 0;
@@ -41,16 +39,4 @@ public:
 private:
 	// Index zero is the root container and is never a language object reference.
 	std::deque<VMHierarchyObject> objects;
-};
-
-struct VMFrame {
-	explicit VMFrame(const VMFunctionData &function_data);
-	std::reference_wrapper<const VMFunctionData> function_data;
-	VMStorage data;
-	unsigned stack_pointer = 0;
-	unsigned hierarchy_index = 0;
-	std::size_t instruction_index = 0;
-	std::size_t operand_base = 0;
-	std::optional<VMOperand> return_value;
-	std::optional<VMOperand> result_override;
 };

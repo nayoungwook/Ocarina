@@ -86,7 +86,8 @@ bool is_castable(const ParserContext &pc, const Type &source, const Type &target
 	if (source.type_kind != TK_Null && source.type_kind != target.type_kind)
 		return false;
 	if (source.type_kind == TK_Null)
-		return is_instance_reference(target) || target.type_str == "string" || target.type_str == "window";
+		return is_instance_reference(target) || target.type_str == "string" ||
+			target.type_str == "window" || target.type_str == "texture";
 	if (source.type_kind == TK_Numeric)
 		return source.data.numeric_data.rank <= target.data.numeric_data.rank;
 	if (source.type_kind == TK_Object || source.type_kind == TK_Scene)

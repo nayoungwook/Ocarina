@@ -107,6 +107,7 @@
     <ClCompile Include="vm_execute.cpp" />
     <ClCompile Include="vm_instruction.cpp" />
     <ClCompile Include="vm_memory.cpp" />
+    <ClCompile Include="vm_render.cpp" />
     <ClCompile Include="vm_hierarchy.cpp" />
     <ClCompile Include="vm_numeric.cpp" />
     <ClCompile Include="ir.cpp" />

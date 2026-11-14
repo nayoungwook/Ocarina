@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{26e81a33-785f-43af-a9ae-0c4edca30f33}</ProjectGuid>
+    <RootNamespace>Ocarina</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <EngineRootForward>$([System.String]::Copy('$(ProjectDir)engine/').Replace('\', '/'))</EngineRootForward>
+    <IntDir>$(ProjectDir)..\build-vs\Ocarina\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>TINYOBJLOADER_DISABLE_FAST_FLOAT;ENGINE_SHADER_ROOT="$(EngineRootForward)shaders";ENGINE_RESOURCE_ROOT="$(EngineRootForward)resources";SDL_MAIN_HANDLED;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)dependencies\include;$(ProjectDir)engine\core;$(ProjectDir)engine\renderer;$(ProjectDir)engine\model;$(ProjectDir)engine\ui;$(ProjectDir)engine\util;$(ProjectDir)engine\error;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <ExceptionHandling>Sync</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)dependencies\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;glew32.lib;SDL3.lib;SDL3_ttf.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>TINYOBJLOADER_DISABLE_FAST_FLOAT;ENGINE_SHADER_ROOT="$(EngineRootForward)shaders";ENGINE_RESOURCE_ROOT="$(EngineRootForward)resources";SDL_MAIN_HANDLED;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)dependencies\include;$(ProjectDir)engine\core;$(ProjectDir)engine\renderer;$(ProjectDir)engine\model;$(ProjectDir)engine\ui;$(ProjectDir)engine\util;$(ProjectDir)engine\error;$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <ExceptionHandling>Sync</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(ProjectDir)dependencies\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opengl32.lib;glew32.lib;SDL3.lib;SDL3_ttf.lib;SDL3_mixer.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Manifest>
+      <EnableSegmentHeap>true</EnableSegmentHeap>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="vm.cpp" />
+    <ClCompile Include="code_data.cpp" />
+    <ClCompile Include="ir_load.cpp" />
+    <ClCompile Include="lexer.cpp" />
+    <ClCompile Include="parser.cpp" />
+    <ClCompile Include="source_files.cpp" />
+    <ClCompile Include="shell_commands.cpp" />
+    <ClCompile Include="type.cpp" />
+    <ClCompile Include="semantics.cpp" />
+    <ClCompile Include="syscall.cpp" />
+    <ClCompile Include="syscall_semantics.cpp" />
+    <ClCompile Include="vm_syscall.cpp" />
+    <ClCompile Include="vm_execute.cpp" />
+    <ClCompile Include="vm_instruction.cpp" />
+    <ClCompile Include="vm_memory.cpp" />
+    <ClCompile Include="vm_render.cpp" />
+    <ClCompile Include="vm_hierarchy.cpp" />
+    <ClCompile Include="vm_numeric.cpp" />
+    <ClCompile Include="ir.cpp" />
+    <ClCompile Include="util.cpp" />
+    <ClCompile Include="main.cpp">
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="vm.h" />
+    <ClInclude Include="vm_dispatch.h" />
+    <ClInclude Include="ovm_panic.h" />
+    <ClInclude Include="shell_commands.h" />
+    <ClInclude Include="code_data.h" />
+    <ClInclude Include="ir_load.h" />
+    <ClInclude Include="lexer.h" />
+    <ClInclude Include="parser.h" />
+    <ClInclude Include="ast.h" />
+    <ClInclude Include="diagnostic.h" />
+    <ClInclude Include="type.h" />
+    <ClInclude Include="semantics.h" />
+    <ClInclude Include="vm_opcode.h" />
+    <ClInclude Include="vm_syscall.h" />
+    <ClInclude Include="vm_memory.h" />
+    <ClInclude Include="vm_numeric.h" />
+    <ClInclude Include="ir.h" />
+    <ClInclude Include="util.h" />
+    <ClInclude Include="error.h" />
+    <ClInclude Include="token.h" />
+    <ClInclude Include="tonic_context.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)..\x64\$(Configuration)\</OutDir>
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
+  <Target Name="CheckEngineArchitecture" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Platform)' != 'x64'" Text="The bundled engine dependencies require the x64 platform." />
+  </Target>
+  <ItemGroup>
+    <ClCompile Include="engine\api\audio.cpp">
+      <ObjectFileName>$(IntDir)engine_api_audio.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\drawing.cpp">
+      <ObjectFileName>$(IntDir)engine_api_drawing.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\fonts.cpp">
+      <ObjectFileName>$(IntDir)engine_api_fonts.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\frame.cpp">
+      <ObjectFileName>$(IntDir)engine_api_frame.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\input.cpp">
+      <ObjectFileName>$(IntDir)engine_api_input.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\lifecycle.cpp">
+      <ObjectFileName>$(IntDir)engine_api_lifecycle.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\resources.cpp">
+      <ObjectFileName>$(IntDir)engine_api_resources.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\api\textures.cpp">
+      <ObjectFileName>$(IntDir)engine_api_textures.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\camera.cpp">
+      <ObjectFileName>$(IntDir)engine_core_camera.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\display.cpp">
+      <ObjectFileName>$(IntDir)engine_core_display.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\engine.cpp">
+      <ObjectFileName>$(IntDir)engine_core_engine.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\game_object.cpp">
+      <ObjectFileName>$(IntDir)engine_core_game_object.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\input.cpp">
+      <ObjectFileName>$(IntDir)engine_core_input.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\scene.cpp">
+      <ObjectFileName>$(IntDir)engine_core_scene.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\core\sound.cpp">
+      <ObjectFileName>$(IntDir)engine_core_sound.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\error\error.cpp">
+      <ObjectFileName>$(IntDir)engine_error_error.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\model\model.cpp">
+      <ObjectFileName>$(IntDir)engine_model_model.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\framebuffer.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_framebuffer.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\light_system.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_light_system.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\light.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_light.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\mesh.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_mesh.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\render_context.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_render_context.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\renderer.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_renderer.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\screen_quad.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_screen_quad.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\shader_manager.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_shader_manager.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\shader.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_shader.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\sprite_batch.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_sprite_batch.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\texture.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_texture.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\renderer\ttfont.cpp">
+      <ObjectFileName>$(IntDir)engine_renderer_ttfont.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\ui\ui_button.cpp">
+      <ObjectFileName>$(IntDir)engine_ui_ui_button.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\ui\ui_scroll.cpp">
+      <ObjectFileName>$(IntDir)engine_ui_ui_scroll.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\util\mathf.cpp">
+      <ObjectFileName>$(IntDir)engine_util_mathf.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+    <ClCompile Include="engine\util\util.cpp">
+      <ObjectFileName>$(IntDir)engine_util_util.obj</ObjectFileName>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="engine\api\context.h" />
+    <ClInclude Include="engine\core\camera.h" />
+    <ClInclude Include="engine\core\display.h" />
+    <ClInclude Include="engine\core\engine.h" />
+    <ClInclude Include="engine\core\game_object.h" />
+    <ClInclude Include="engine\core\input.h" />
+    <ClInclude Include="engine\core\scene.h" />
+    <ClInclude Include="engine\core\sound.h" />
+    <ClInclude Include="engine\engine.h" />
+    <ClInclude Include="engine\error\error.h" />
+    <ClInclude Include="engine\model\model.h" />
+    <ClInclude Include="engine\renderer\color.h" />
+    <ClInclude Include="engine\renderer\font_render_options.h" />
+    <ClInclude Include="engine\renderer\framebuffer.h" />
+    <ClInclude Include="engine\renderer\light_system.h" />
+    <ClInclude Include="engine\renderer\light.h" />
+    <ClInclude Include="engine\renderer\mesh.h" />
+    <ClInclude Include="engine\renderer\render_context.h" />
+    <ClInclude Include="engine\renderer\renderer.h" />
+    <ClInclude Include="engine\renderer\screen_quad.h" />
+    <ClInclude Include="engine\renderer\shader_manager.h" />
+    <ClInclude Include="engine\renderer\shader.h" />
+    <ClInclude Include="engine\renderer\sprite_batch.h" />
+    <ClInclude Include="engine\renderer\texture.h" />
+    <ClInclude Include="engine\renderer\ttfont.h" />
+    <ClInclude Include="engine\ui\ui_button.h" />
+    <ClInclude Include="engine\ui\ui_scroll.h" />
+    <ClInclude Include="engine\util\mathf.h" />
+    <ClInclude Include="engine\util\util.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <EngineRuntime Include="$(ProjectDir)dependencies\lib\SDL3.dll;$(ProjectDir)dependencies\lib\SDL3_ttf.dll;$(ProjectDir)dependencies\lib\SDL3_mixer.dll;$(ProjectDir)dependencies\lib\glew32.dll" />
+    <EngineShader Include="$(ProjectDir)engine\shaders\*" />
+    <None Include="engine\shaders\*" />
+  </ItemGroup>
+  <Target AfterTargets="Build" Name="CopyEngineRuntime">
+    <MakeDir Directories="$(OutDir)engine_shaders" />
+    <Copy DestinationFolder="$(OutDir)" SourceFiles="@(EngineRuntime)" SkipUnchangedFiles="true" />
+    <Copy DestinationFolder="$(OutDir)engine_shaders" SourceFiles="@(EngineShader)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
+
+
+

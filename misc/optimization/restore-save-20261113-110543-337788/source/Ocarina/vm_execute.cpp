@@ -1,0 +1,190 @@
+#include "vm.h"
+#include "vm_numeric.h"
+#include "vm_opcode.h"
+
+#include <algorithm>
+#include "ovm_panic.h"
+
+static constexpr unsigned VM_STACK_SIZE = 1024 * 1024;
+static constexpr unsigned VM_CALL_DEPTH = 512;
+
+VMFrame::VMFrame(const VMFunctionData &function_data) : function_data(function_data) {
+}
+
+void OVM::clear_execution() {
+	frames.clear();
+	stack_index = 0;
+	hierarchy.reset();
+	current_scene = 0;
+	globals = {};
+	stack_size = 0;
+	syscalls.reset();
+	output.reset();
+}
+
+std::vector<VMOperand> OVM::update_function_arguments(unsigned argument_count) {
+	const std::size_t base = frames.empty() ? 0 : frames.back().operand_base;
+	if (stack_index < base || argument_count > stack_index - base)
+		throw OVMPanic("Not enough function arguments on the operand stack.");
+
+	std::vector<VMOperand> arguments(argument_count);
+	for (unsigned i = 0; i < argument_count; ++i) {
+		const unsigned index = argument_count - i - 1;
+		arguments[index] = vm_stack_pop();
+	}
+	return arguments;
+}
+
+// hierarchy_index identifies the receiver object in the hierarchy.
+// For a.foo(), hierarchy_index is a's instance index.
+// receiver is true when the receiver must be popped from the operand stack.
+void OVM::call_function(const VMFunctionData &function_data,
+	unsigned argument_count,
+	unsigned hierarchy_index,
+	bool receiver) {
+	std::vector<VMOperand> arguments = update_function_arguments(argument_count);
+
+	if (receiver) {
+		const VMOperand object = vm_stack_pop();
+		find_object(object);
+		if (static_cast<unsigned>(object.val.i32) != hierarchy_index)
+			throw OVMPanic("Invalid method receiver.");
+	}
+
+	push_frame(function_data, std::move(arguments), hierarchy_index);
+}
+
+void OVM::push_frame(const VMFunctionData &function_data,
+	std::vector<VMOperand> arguments,
+	unsigned hierarchy_index) {
+
+	if (!function_data.code_loaded)
+		throw OVMPanic("Function code is not loaded: " + function_data.name);
+	if (arguments.size() != function_data.argument_count)
+		throw OVMPanic("Wrong argument count for function: " + function_data.name);
+	if (frames.size() >= VM_CALL_DEPTH || function_data.stack_size > VM_STACK_SIZE - stack_size)
+		throw OVMPanic("VM call stack overflow.");
+
+	VMFrame frame(function_data);
+	frame.data.resize(function_data.stack_size); // allocate stack buffer.
+	frame.hierarchy_index = hierarchy_index;
+	frame.operand_base = stack_index;
+
+	// upload arguments into stack buffer.
+	unsigned offset = 0;
+	for (std::size_t i = 0; i < arguments.size(); ++i) {
+		const unsigned size = function_data.argument_sizes[i];
+		frame.data.save(offset, size, arguments[i]);
+		offset += size;
+	}
+
+	frames.push_back(std::move(frame));
+	stack_size += function_data.stack_size;
+}
+
+std::optional<VMOperand> OVM::finish_frame() {
+	VMFrame &frame = frames.back();
+	const VMFunctionData &function_data = frame.function_data.get();
+	std::optional<VMOperand> result;
+
+	bool should_return_value = function_data.return_type != "void" && !function_data.is_constructor;
+	if (should_return_value) {
+		if (!frame.return_value) { // Should return value!!!
+			if (stack_index <= frame.operand_base)
+				throw OVMPanic("Function did not return a value.");
+			frame.return_value = vm_stack_pop();
+		}
+
+		result = *frame.return_value;
+	}
+
+	if (frame.result_override)
+		result = frame.result_override;
+
+	stack_index = frame.operand_base;
+	stack_size -= function_data.stack_size;
+	frames.pop_back();
+	return result;
+}
+
+std::optional<VMOperand> OVM::vm_exec_function(const VMFunctionData &function_data,
+	unsigned hierarchy_index) {
+	push_frame(function_data, {}, hierarchy_index);
+	try {
+		while (!frames.empty()) {
+			VMFrame &frame = frames.back();
+			const auto &instructions = frame.function_data.get().instructions;
+			bool finished = frame.instruction_index >= instructions.size();
+
+			if (!finished) {
+				const VMInstruction &instruction = instructions.at(frame.instruction_index++);
+				exec_instruction(instruction, frame.instruction_index, frame, frame.hierarchy_index);
+				finished = instruction.opcode == OP_RET;
+			}
+			if (!finished)
+				continue;
+
+			const auto result = finish_frame();
+			if (frames.empty())
+				return result;
+			if (result)
+				vm_stack_push(*result);
+		}
+	}
+	catch (const std::exception &error) {
+		std::string message = error.what();
+		for (auto frame = frames.rbegin(); frame != frames.rend(); ++frame) {
+			const auto &function = frame->function_data.get();
+			const std::size_t index =
+				frame->instruction_index == 0 ? 0 : frame->instruction_index - 1;
+			message += "\n  at " +
+				(function.name.empty() ? std::string("<initializer>") : function.name) +
+				" instruction " + std::to_string(index);
+		}
+		throw OVMPanic(message);
+	}
+	return std::nullopt;
+}
+
+std::optional<VMOperand> OVM::run(std::ostream &out, RunMode mode) {
+	if (!frames.empty())
+		throw OVMPanic("This OVM is already running.");
+	clear_execution();
+
+	syscalls.emplace(*this);
+	output = std::ref(out);
+
+	try {
+		if (!vm_stack)
+			vm_stack = std::make_unique<VMOperand[]>(MAX_STACK_SIZE);
+		unsigned global_size = 0;
+		for (const auto &[id, variable] : variable_data)
+			global_size = std::max(global_size, variable.offset + variable.size);
+		globals.resize(global_size);
+		const auto entry = function_data.find(main_func_id);
+		if (entry == function_data.end())
+			throw OVMPanic("Bytecode has no main function.");
+		if (entry->second.argument_count != 0)
+			throw OVMPanic("main must not require arguments.");
+
+		if (initializer.code_loaded)
+			vm_exec_function(initializer);
+
+		const auto result = vm_exec_function(entry->second);
+
+		if (mode == RunMode::WaitForWindow) {
+			if (engine.get_display() != nullptr)
+				engine.start();
+			engine.shutdown();
+		}
+
+		if (mode == RunMode::WaitForWindow || engine.get_display() == nullptr)
+			clear_execution();
+		return result;
+	}
+	catch (...) {
+		engine.shutdown();
+		clear_execution();
+		throw;
+	}
+}
